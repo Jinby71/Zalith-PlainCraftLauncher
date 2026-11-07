@@ -284,6 +284,15 @@ fun PclPluginPanel() {
                                     reload()
                                 }
                             },
+                            onOpen = {
+                                // 自带界面的插件：入口交给插件自己的 app，启动器只负责拉起它
+                                if (!ZlPluginManager.launch(context, plugin)) {
+                                    PclHintHost.push(
+                                        "没有找到「${plugin.name}」的应用，重新装一次插件 APK 再试。",
+                                        PclHintTheme.Red,
+                                    )
+                                }
+                            },
                             onDelete = { pendingDelete = plugin },
                         )
                     }
@@ -329,6 +338,7 @@ fun PclPluginPanel() {
 private fun PluginRow(
     plugin: ZlPlugin,
     onToggle: () -> Unit,
+    onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val p = pclPalette
@@ -350,6 +360,10 @@ private fun PluginRow(
                             append(" · ")
                             append(if (theme.renderer == PclUiRenderer.Glass) "玻璃" else "纯色")
                         }
+                    } else if (plugin.entry) {
+                        // 自带界面的插件：不覆盖文件，界面在它自己的 app 里
+                        append("自带界面 · ")
+                        append(plugin.pkg.ifBlank { plugin.id })
                     } else {
                         append(ZlPluginManager.targetLabel(plugin.target))
                         append(" · ")
@@ -368,6 +382,13 @@ private fun PluginRow(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (plugin.entry && plugin.enabled) {
+                PclButton(
+                    text = "打开",
+                    colorState = PclColorState.Highlight,
+                    onClick = onOpen,
+                )
+            }
             PclButton(
                 text = if (plugin.enabled) "停用" else "启用",
                 colorState = if (plugin.enabled) PclColorState.Normal else PclColorState.Highlight,

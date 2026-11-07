@@ -116,6 +116,12 @@ data class ZlPlugin(
     val hasUiSpec: Boolean = false,
     /** 插件目录下有没有 `pages.json`（这个插件想往启动器里加页面）。 */
     val hasPagesSpec: Boolean = false,
+    /** 插件 APK 的包名（插件目录名是它清洗过的形式，这里保留原始包名）。 */
+    val pkg: String = "",
+    /** 插件自带界面：可以在首页给一个入口、在插件列表里点「打开」。 */
+    val entry: Boolean = false,
+    /** 入口显示名；为空时用 [name]。 */
+    val label: String = "",
 ) {
     /** 是否界面皮肤插件。 */
     val isTheme: Boolean get() = ui.isNotBlank() || hasUiSpec
@@ -132,6 +138,15 @@ private data class PluginManifest(
     @SerializedName("enabled") val enabled: Boolean = true,
     /** 界面皮肤标识；给了就说明这是皮肤插件，可以不带任何文件。 */
     @SerializedName("ui") val ui: String = "",
+    /**
+     * 插件自带界面（`"entry": true`）。
+     *
+     * 这类插件不覆盖文件、也不是皮肤：它本身就是一个装好的 app，启动器只负责给它
+     * 一个入口（首页的切换胶囊、插件列表里的「打开」）。带这个字段可以没有 `files/`。
+     */
+    @SerializedName("entry") val entry: Boolean = false,
+    /** 入口上显示的名字（首页胶囊）；不写就用 [name]。 */
+    @SerializedName("label") val label: String = "",
 )
 
 /** `meta.json`：清单 + 开关状态。 */
@@ -145,6 +160,11 @@ private data class PluginMeta(
     val fileCount: Int = 0,
     val enabled: Boolean = false,
     val ui: String = "",
+    /** 插件 APK 的包名；打开插件自带的界面时要用它。 */
+    val pkg: String = "",
+    /** 自带界面（见 [PluginManifest.entry]）。 */
+    val entry: Boolean = false,
+    val label: String = "",
 )
 
 /** `applied.json`：启用时记下动了哪些文件，停用时才好精确还原。 */
@@ -258,6 +278,54 @@ object ZlPluginManager {
                 json?.takeIf { it.isNotBlank() }
                     ?.let { ZlPluginPages(plugin.id, plugin.name, it) }
             }
+    }
+
+    /**
+     * 自带界面、并且已经启用的插件。
+     *
+     * 首页的「Java 版 / 基岩版」这类切换**不能写死包名**：谁是插件、入口叫什么，
+     * 全部由插件自己的 `plugin.json`（`entry` / `label`）声明。启动器里没有任何一个
+     * 插件专用包名，装了什么就出现什么，卸掉就消失。
+     */
+    fun entryPlugins(context: Context): List<ZlPlugin> =
+        list(context).filter { it.enabled && it.entry }
+
+    /**
+     * 打开插件自带的界面。
+     *
+     * 插件是**独立 app**，这里只是用系统的启动意图把它拉到前台，不加载它的任何代码，
+     * 也不共享进程。没装（或没有启动 Activity）时返回 false，由调用方给提示。
+     */
+    fun launch(context: Context, plugin: ZlPlugin): Boolean {
+        val pkg = plugin.pkg.ifBlank { plugin.id }
+        val intent = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+        // 调用方可能是被 ContextThemeWrapper 包着的 Activity，统一 NEW_TASK 更保险
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { context.startActivity(intent) }.isSuccess
+    }
+
+    /**
+     * 只扫「已安装的应用」，把带 `assets/zplugin/plugin.json` 的认出来。
+     *
+     * 首页的插件入口等不起「用户先进插件管理页」—— 装完 APK 回到启动器就该看得见。
+     * 与 [scan] 的区别：不碰下载目录和投递目录，冷启动时不会悄悄装任何东西。
+     *
+     * 必须在 IO 线程调用。
+     */
+    fun recognizeInstalled(context: Context): List<ZlPlugin> {
+        val root = root(context).apply { mkdirs() }
+        val records = readScanRecords(root).toMutableList()
+        val installed = mutableListOf<ZlPlugin>()
+        val rejected = mutableListOf<String>()
+        val before = records.size
+        runCatching { scanInstalled(context, records, installed, rejected) }
+            .onFailure { Logger.warning(TAG, "识别已安装插件失败", it) }
+        // 没有新记录就不写盘：这个方法每次冷启动都会跑一遍
+        if (records.size != before) writeScanRecords(root, records.takeLast(300))
+        if (installed.isNotEmpty()) {
+            Logger.info(TAG, "冷启动识别到 ${installed.size} 个插件：" + installed.joinToString("、") { it.name })
+        }
+        return list(context)
     }
 
     /**
@@ -420,7 +488,11 @@ object ZlPluginManager {
             // 用「包名 + 版本号」当指纹：应用升级后会重新识别一次
             val key = "pkg:" + pkg + ":" + info.longVersionCode
             if (records.any { it.path == key }) return@forEach
-            if (!looksLikePlugin(apk)) return@forEach
+            if (!looksLikePlugin(apk)) {
+                // 普通应用也记一笔：否则每次冷启动都要把几百个 APK 重新拆一遍找清单
+                records += ScanRecord(path = key)
+                return@forEach
+            }
 
             if (sanitizeId(pkg) in known) {
                 // 已经装过同一个包，不重复安装
@@ -549,7 +621,8 @@ object ZlPluginManager {
             }
             // 皮肤插件只负责「打开一套界面」，本来就没有要覆盖的文件，所以放行
             val hasSpec = findEntry(zip, UI_SPEC_ENTRY) != null
-            if (entries.isEmpty() && manifest.ui.isBlank() && !hasSpec) {
+            // 自带界面的插件（entry）也不覆盖文件，它的内容在插件 app 自己那边
+            if (entries.isEmpty() && manifest.ui.isBlank() && !hasSpec && !manifest.entry) {
                 throw IllegalStateException("这个插件里没有文件（${FILES_PREFIX} 下是空的）。")
             }
             entries.forEach { checkRelative(it.normalizedEntryName().removePrefix(FILES_PREFIX)) }
@@ -591,6 +664,9 @@ object ZlPluginManager {
                 fileCount = entries.size,
                 enabled = false, // 启用由下面统一处理
                 ui = manifest.ui.trim().lowercase(),
+                pkg = pkgName.orEmpty(),
+                entry = manifest.entry,
+                label = manifest.label.trim(),
             )
 
             // 皮肤的渲染参数：原样存一份到插件目录，界面那边直接读这个文件
@@ -646,6 +722,9 @@ object ZlPluginManager {
             ui = meta.ui,
             hasUiSpec = File(dir, "ui.json").isFile,
             hasPagesSpec = File(dir, "pages.json").isFile,
+            pkg = meta.pkg.ifBlank { meta.id },
+            entry = meta.entry,
+            label = meta.label,
         )
 
         // ⑤ 默认启用：与「资源包放进去就生效」一致；启用失败不影响安装本身
@@ -688,6 +767,9 @@ object ZlPluginManager {
             ui = meta.ui,
             hasUiSpec = File(dir, "ui.json").isFile,
             hasPagesSpec = File(dir, "pages.json").isFile,
+            pkg = meta.pkg.ifBlank { meta.id.ifBlank { dir.name } },
+            entry = meta.entry,
+            label = meta.label,
         )
     }
 

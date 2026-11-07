@@ -389,9 +389,10 @@ fun PclMainScreen(
         // 必须在 apply 之前设好：apply 要按它去解插件声明的渲染器 dex。
         PclUiRuntime.assetDir = themeJson?.dir
         // 插件软玻璃渲染器要在运行时用 DexClassLoader 加载，需要 Context。
-        // 只传 applicationContext：插件要拿 Activity 应该自己去找（反射 ActivityThread），
-        // 启动器不给它开后门，也不该为了某个插件的需求改自己的上下文语义。
         PclUiRuntime.appContext = context.applicationContext
+        // 宿主 Activity：插件要往窗口上盖东西（比如启动画面）时唯一能用的入口。
+        // 由启动器主动提供，插件不必去反射 ActivityThread。
+        PclUiRuntime.hostActivity = context.pclHostActivity()
         PclUiRuntime.apply(themeJson?.json, themeJson?.id.orEmpty(), themeJson?.name)
         // 预热素材：`content://` 是跨进程现画的图，第一次读会走 IPC + 解码。
         // 留给组合期就会在首帧卡一下，这里先在 IO 线程把缓存填好。
@@ -1839,4 +1840,21 @@ private fun PclExtraButtons(
             }
         }
     }
+}
+
+/**
+ * 从组合期拿到的 Context 里找出宿主 Activity。
+ *
+ * `LocalContext.current` 常常是 `ContextThemeWrapper` 套了几层，直接 `as? Activity`
+ * 会拿到 null；逐层拆 `baseContext` 才能摸到真正那个 Activity。
+ * 插件要往窗口上挂东西（启动画面之类）只能靠它 —— 用 applicationContext 启动界面
+ * 在 Android 10+ 会被当成后台启动静默拦掉。
+ */
+private fun android.content.Context.pclHostActivity(): android.app.Activity? {
+    var ctx: android.content.Context? = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

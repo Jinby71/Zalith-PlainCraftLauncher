@@ -572,6 +572,19 @@ object PclUiRuntime {
     var appContext: android.content.Context? = null
 
     /**
+     * 宿主 Activity —— 给插件用的「窗口入口」。
+     *
+     * 为什么单独给一个字段而不是让插件自己去猜：
+     *   插件想在自己被启用时盖一层启动画面，只有拿到 Activity 才能往 `decorView`
+     *   上挂 View；用 `applicationContext` 启动 Activity 在 Android 10+ 会被判定为
+     *   后台启动、静默拦掉。这是启动器**主动提供给插件**的能力，不该让每个插件
+     *   各自去反射 `ActivityThread`。
+     *
+     * null = 当前没有可用的 Activity（比如界面还没挂上），插件应自行降级。
+     */
+    var hostActivity: android.app.Activity? = null
+
+    /**
      * 低版本用的「模糊背景底片」。
      *
      * Android 12+ 走系统的 `RenderEffect`，这张图用不上（null）；

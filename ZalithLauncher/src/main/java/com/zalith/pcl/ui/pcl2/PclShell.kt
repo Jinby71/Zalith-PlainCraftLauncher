@@ -324,7 +324,9 @@ fun PclMainScreen(
     // 当前版块被「功能隐藏」藏起来时，退回主页。
     // 用 `shouldHide` 而不是 `isHidden`：临时显示期间（右下角连点 10 次）放出来的
     // 入口是可以真的进去的，不该被人一脚踢回主页。
-    LaunchedEffect(nav.section, PclSkinSettings.hidden, PclSkinSettings.peekUntil) {
+    // 插件声明的隐藏项也算：换了插件、插件升级改了 hidden，都要重新判一次。
+    val pluginHidden = com.zalith.pcl.ui.pcl2.theme.PclUiRuntime.theme?.hiddenSections
+    LaunchedEffect(nav.section, PclSkinSettings.hidden, PclSkinSettings.peekUntil, pluginHidden) {
         if (PclSkinSettings.shouldHide(nav.section.hiddenKey)) nav.go(PclSection.Home)
     }
 
@@ -338,7 +340,9 @@ fun PclMainScreen(
         if (until <= 0L) return@LaunchedEffect
         val wait = until - SystemClock.elapsedRealtime()
         if (wait > 0L) delay(wait)
-        if (PclSkinSettings.isHidden(nav.section.hiddenKey)) {
+        val blocked = PclSkinSettings.isHidden(nav.section.hiddenKey) ||
+                nav.section.hiddenKey in (com.zalith.pcl.ui.pcl2.theme.PclUiRuntime.theme?.hiddenSections ?: emptySet())
+        if (blocked) {
             PclSkinSettings.startPeek()
         } else {
             PclSkinSettings.stopPeek()

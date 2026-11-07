@@ -84,6 +84,29 @@ data class PclSkinGlassParams(
     val fillArgb: Int = 0xFFFFFFFF.toInt(),
     /** 表面色的不透明度（`roles.<role>.alpha`）；0 = 全透明玻璃，不叠色。 */
     val fillAlpha: Float = 0f,
+    /**
+     * 这块表面此刻处于什么状态（按下、选中、暗色 …）。
+     *
+     * 放在参数里而不是方法签名里，是为了**不破坏已发布的插件**：
+     * 老渲染器只读它认识的字段，新字段加进来它当没看见，照样能用。
+     */
+    val state: PclSkinState = PclSkinState(),
+)
+
+/**
+ * 表面的交互状态快照。
+ *
+ * 插件可以据此画出「按下去会陷下去」「选中态边缘更亮」这类反馈 ——
+ * 这些光靠静态参数做不到，但它又不需要插件参与事件分发。
+ */
+data class PclSkinState(
+    val pressed: Boolean = false,
+    val selected: Boolean = false,
+    val enabled: Boolean = true,
+    /** 当前是否暗色主题。 */
+    val dark: Boolean = false,
+    /** 屏幕密度（dp → px），插件画 1dp 的线要用它。 */
+    val density: Float = 1f,
 )
 
 /**
@@ -92,7 +115,11 @@ data class PclSkinGlassParams(
  * 插件不该自己去读 `ui.json` —— 一份参数两种读法迟早会对不上，
  * 这里由启动器统一解析完再交出去。
  */
-fun PclGlassParams.toSkinParams(fill: Color, fillAlpha: Float): PclSkinGlassParams =
+fun PclGlassParams.toSkinParams(
+    fill: Color,
+    fillAlpha: Float,
+    state: PclSkinState = PclSkinState(),
+): PclSkinGlassParams =
     PclSkinGlassParams(
         blur = blur,
         refraction = refraction,
@@ -104,4 +131,5 @@ fun PclGlassParams.toSkinParams(fill: Color, fillAlpha: Float): PclSkinGlassPara
         shadow = shadow,
         fillArgb = fill.toArgb(),
         fillAlpha = fillAlpha,
+        state = state,
     )

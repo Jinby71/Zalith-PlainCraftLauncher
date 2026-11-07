@@ -67,6 +67,32 @@ enum class PclUiRenderer {
 }
 
 /**
+ * 插件渲染器接管到哪一步。
+ *
+ * 这是「插件说了算」的开关：插件声明了 `rendererClass`（谁来画）之后，
+ * 还要说明**从哪个版本开始由它画**（什么时候画）。
+ */
+enum class PclRendererScope {
+    /**
+     * 只接管系统自己画不了玻璃的版本（Android 11 及以下）。
+     *
+     * Android 12+ 继续用系统的 `RenderEffect` 做实时模糊 —— 那是这台机器上
+     * 能做到的最好效果，让插件用静态底片去替它是退步。**默认值。**
+     */
+    Limited,
+
+    /**
+     * 所有版本都由插件画，启动器不再自绘表面。
+     *
+     * 插件要对全部机型负责：它会拿到一张预模糊的整屏底片，自己决定模糊、折射、
+     * 高光、状态色。启动器只负责把结果裁成主题要求的形状并贴上去。
+     *
+     * 一旦插件某一块返回 null，那一块会退回启动器内置画法 —— 不会留白。
+     */
+    All,
+}
+
+/**
  * 软玻璃（没有系统模糊时那条路）的底片质量。
  *
  * 底片是「把背景层按小分辨率重画一遍」，玻璃再从它上面取样。
@@ -187,6 +213,24 @@ data class PclUiTheme(
      * 这样低版本玻璃的采样、模糊、高光这些观感细节可以随插件迭代，不必重编启动器。
      */
     val rendererClass: String? = null,
+    /**
+     * 插件要求隐藏的内置版块（`ui.json` 的 `hidden` 数组）。
+     *
+     * 这里写的是**内置入口**：`launch`（主页）/ `download` / `link` / `setup` / `other`，
+     * 以及设置页的子页（`setup.link` / `setup.ui` …）。
+     *
+     * 插件把某个版块藏起来，等于告诉启动器「这一块我用自己的页面替代」——
+     * 用户看到的就不再是启动器自带的那套内容。主页（`launch`）不可隐藏，
+     * 否则插件写坏了会把启动器变成一个没有出口的空壳。
+     */
+    val hiddenSections: Set<String> = emptySet(),
+    /**
+     * 插件渲染器接管到哪一步（`ui.json` 的 `rendererScope`）。
+     *
+     * 缺省 [PclRendererScope.Limited]：只有画不了系统玻璃的版本交给插件。
+     * 写 `all` 则所有版本都由插件画，启动器不再自绘表面。
+     */
+    val rendererScope: PclRendererScope = PclRendererScope.Limited,
     /** 卡片底色。 */
     val cardColor: Color = Color.White,
     /** 卡片底色的不透明度（0..1）。 */
@@ -304,6 +348,10 @@ private data class ThemeJson(
     @SerializedName("renderer") val renderer: String? = null,
     /** 插件自定义软玻璃渲染器的全限定类名；见 [PclSkinRenderer]。 */
     @SerializedName("rendererClass") val rendererClass: String? = null,
+    /** 接管范围：`limited`（默认，只有低版本）/ `all`（所有版本）。 */
+    @SerializedName("rendererScope") val rendererScope: String? = null,
+    /** 需要隐藏的内置版块 key。 */
+    @SerializedName("hidden") val hidden: List<String>? = null,
     @SerializedName("card") val card: SideJson? = null,
     @SerializedName("sidebar") val sidebar: SideJson? = null,
     @SerializedName("corner") val corner: Float? = null,
@@ -341,6 +389,14 @@ fun parsePclUiTheme(json: String, fallbackId: String = ""): PclUiTheme {
         name = raw.name?.trim().orEmpty(),
         renderer = renderer,
         rendererClass = raw.rendererClass?.trim()?.ifBlank { null },
+        hiddenSections = raw.hidden.orEmpty()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() && it != "launch" && it != "home" }
+            .toSet(),
+        rendererScope = when (raw.rendererScope?.trim()?.lowercase()) {
+            "all", "always", "every" -> PclRendererScope.All
+            else -> PclRendererScope.Limited
+        },
         cardColor = raw.card?.color?.let(::parseHexColor) ?: def.cardColor,
         cardAlpha = raw.card?.alpha?.coerceIn(0f, 1f) ?: def.cardAlpha,
         sidebarColor = raw.sidebar?.color?.let(::parseHexColor),
@@ -486,11 +542,12 @@ fun pclGlassDiagnostics(theme: PclUiTheme?): String {
         append(" · 折射 ").append(if (pclRefractionSupported) "可用" else "不可用（需 Android 13）")
         // 低版本没有 RenderEffect，玻璃是「插件画」还是「启动器画」直接决定观感，
         // 这行让用户一眼看出插件渲染器到底接管了没有 —— 否则加载失败是静默的。
-        append(" · 低版本玻璃 ").append(
+        append(" · 表面绘制 ").append(
             when {
                 theme.rendererClass.isNullOrBlank() -> "内置"
-                PclUiRuntime.skinRenderer != null -> "插件接管"
-                else -> "插件加载失败（已退回内置）"
+                PclUiRuntime.skinRenderer == null -> "插件加载失败（已退回内置）"
+                theme.rendererScope == PclRendererScope.All -> "插件（全部版本）"
+                else -> "插件（仅系统无玻璃时）"
             },
         )
     }
@@ -603,6 +660,8 @@ fun Modifier.pclSurface(
      * 这是启动器开放给插件的接口点，改外观不用改启动器代码。
      */
     role: String = "",
+    /** 这块表面此刻的状态（按下 / 选中 / 禁用 / 暗色），会转交给插件渲染器。 */
+    state: PclSkinState = PclSkinState(),
 ): Modifier {
     if (theme == null) return this.background(fallbackColor, shape)
 
@@ -639,6 +698,29 @@ fun Modifier.pclSurface(
         return this.background(color.copy(alpha = alpha), shape)
     }
 
+    // ── 插件接管 ──────────────────────────────────────────────────────────
+    // 插件声明了 rendererClass 且加载成功、底片也备好时，玻璃**只由插件画**：
+    // 系统的 `drawBackdrop`、启动器的软玻璃、极淡的拟态兜底全部不再参与。
+    //
+    // 这一步刻意放在 `backdrop == null || !pclGlassSupported` 之前 ——
+    // 放在后面的话，Android 12+ 永远先命中系统模糊，插件只能管低版本，
+    // 「装了插件却还在跑启动器自带渲染」就是这么来的。
+    run {
+        val soft = PclUiRuntime.soft
+        val renderer = PclUiRuntime.skinRenderer
+        // 接管范围：`all` 连 Android 12+ 也交给插件；默认只在系统画不了玻璃的版本接管。
+        val scoped = theme.rendererScope == PclRendererScope.All || !pclGlassSupported
+        if (soft != null && renderer != null && scoped) {
+            return this.pclPluginSurface(
+                renderer = renderer,
+                role = role,
+                params = theme.glass.toSkinParams(color, alpha, state),
+                shape = shape,
+                soft = soft,
+            )
+        }
+    }
+
     // 系统太老（没有 RenderEffect）或拿不到底片：走不了 `drawBackdrop`。
     //
     // 这里以前是「上亮下暗的半透明色块 + 6dp 投影」—— 那是**一块白板**，
@@ -648,17 +730,6 @@ fun Modifier.pclSurface(
     if (backdrop == null || !pclGlassSupported) {
         val soft = PclUiRuntime.soft
         if (soft != null) {
-            // 插件声明了 rendererClass 就由它来画 —— 低版本（Android 11 及以下）
-            // 的玻璃观感从此归插件管，修采样、调折射都只重发插件。
-            PclUiRuntime.skinRenderer?.let { renderer ->
-                return this.pclPluginSurface(
-                    renderer = renderer,
-                    role = role,
-                    params = theme.glass.toSkinParams(color, alpha),
-                    shape = shape,
-                    soft = soft,
-                )
-            }
             return this.pclSoftGlass(
                 theme = theme,
                 soft = soft,

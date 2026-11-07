@@ -103,6 +103,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -139,6 +140,7 @@ import com.zalith.pcl.ui.pcl2.theme.PclSurface
 import com.zalith.pcl.ui.pcl2.theme.cornerOr
 import com.zalith.pcl.ui.pcl2.theme.buttonCornerOr
 import com.zalith.pcl.ui.pcl2.theme.roleCornerOr
+import com.zalith.pcl.ui.pcl2.theme.PclSkinState
 import com.zalith.pcl.ui.pcl2.theme.pclSurface
 import com.zalith.pcl.ui.pcl2.theme.glassEnabledFor
 import com.zalith.pcl.ui.pcl2.theme.roleAlpha
@@ -434,6 +436,13 @@ fun PclButton(
                         fallbackColor = backgroundColor,
                         colorOverride = backgroundColor,
                         role = "button",
+                        // 插件要能画出「按下去陷一点 / 选中更亮」，就得知道此刻的状态。
+                        state = PclSkinState(
+                            pressed = pressed,
+                            enabled = enabled,
+                            dark = p.bg1.luminance() < 0.45f,
+                            density = LocalDensity.current.density,
+                        ),
                     )
                 } else {
                     Modifier.background(backgroundColor)

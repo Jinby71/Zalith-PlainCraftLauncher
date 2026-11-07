@@ -147,8 +147,15 @@ object PclSkinSettings {
      *
      * 三处生效点（顶部导航、设置左栏、更多左栏）与「当前版块被藏就退回主页」
      * 都用这个，而不是 [isHidden] —— 否则连点十次放出来的入口点不进去。
+     *
+     * 另外叠一层**插件声明**的隐藏项（`ui.json` 的 `hidden`）：插件把那块换成了
+     * 自己的页面，内置入口就该让位。连点临时显示对插件层同样有效，
+     * 所以插件写坏了也还能把入口放出来。
      */
-    fun shouldHide(key: String): Boolean = key in hidden && !isPeeking()
+    fun shouldHide(key: String): Boolean {
+        val byPlugin = key in (com.zalith.pcl.ui.pcl2.theme.PclUiRuntime.theme?.hiddenSections ?: emptySet())
+        return (key in hidden || byPlugin) && !isPeeking()
+    }
 
     fun isPeeking(): Boolean = peekUntil > SystemClock.elapsedRealtime()
 

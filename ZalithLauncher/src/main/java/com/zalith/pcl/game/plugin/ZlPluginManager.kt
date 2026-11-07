@@ -262,13 +262,18 @@ object ZlPluginManager {
     /**
      * 补齐插件素材目录。
      *
+     * **按文件比对，不是「目录非空就跳过」。**
+     * 以前这里只要 `res/` 里有一个文件就直接 return，后果是：
+     * 插件升级时新加的素材（比如 1.2.1 新增的 `splash_icon.png`）永远不会落盘，
+     * 界面读不到就退回内置兜底图 —— 用户看到的是「图标不对」，而且只有卸载重装才能好。
+     * 现在缺哪个补哪个、比 APK 旧的也重写，插件升级即时生效。
+     *
      * @return 目录里现在有素材了（或本来就有）。
      */
     fun ensureAssets(plugin: ZlPlugin): Boolean {
-        val resDir = File(plugin.dir, "res")
-        if (resDir.isDirectory && resDir.listFiles()?.isNotEmpty() == true) return true
         val apk = File(plugin.dir, "plugin.apk")
-        if (!apk.isFile) return false
+        if (!apk.isFile) return File(plugin.dir, "res").isDirectory
+        val apkTime = apk.lastModified()
         return runCatching {
             ZipFile(apk).use { zip ->
                 var copied = 0
@@ -278,14 +283,22 @@ object ZlPluginManager {
                     val rel = name.removePrefix(RES_PREFIX)
                     if (rel.isBlank()) return@forEach
                     val out = File(plugin.dir, "res/$rel")
-                    out.parentFile?.mkdirs()
-                    zip.getInputStream(entry).use { input ->
-                        out.outputStream().use { output -> input.copyTo(output) }
+                    // 已存在、大小一致、且不比 APK 旧 —— 说明这份就是当前这版插件带的。
+                    if (out.isFile && out.length() == entry.size && out.lastModified() >= apkTime) {
+                        return@forEach
                     }
-                    copied++
+                    out.parentFile?.mkdirs()
+                    runCatching {
+                        zip.getInputStream(entry).use { input ->
+                            out.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        // 时间戳对齐 APK，下次就不用再比一遍
+                        out.setLastModified(apkTime)
+                        copied++
+                    }.onFailure { Logger.warning(TAG, "写素材 $rel 失败：$it") }
                 }
                 if (copied > 0) Logger.info(TAG, "已补齐 ${plugin.name} 的素材（$copied 个文件）")
-                copied > 0
+                File(plugin.dir, "res").isDirectory
             }
         }.getOrDefault(false)
     }

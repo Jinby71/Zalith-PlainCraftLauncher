@@ -53,7 +53,7 @@ object PclSkinRendererLoader {
 
         return runCatching {
             val context = PclUiRuntime.appContext ?: return null
-            val dexPath = resolveDexPath(pluginDir, apk)
+            val dexPath = resolveDexPath(context, pluginDir, apk)
             val loader = DexClassLoader(
                 dexPath,
                 optimizedDir(context).absolutePath,
@@ -73,14 +73,18 @@ object PclSkinRendererLoader {
     /**
      * 拼出交给 DexClassLoader 的 dex 路径。
      *
-     * 两个坑：
+     * 三个坑：
      *  1. `DexClassLoader` 拿到 APK 路径时**只读 `classes.dex`**，多 dex 的
      *     `classes2.dex` / `classes3.dex` 不会被加载 —— 而渲染器类常常正好被
-     *     分到副 dex 里（插件的方法数一多就会拆）。所以副 dex 必须抽出来，
+     *     分到副 dex 里（插件的方法数一多就会拆）。所以每个 dex 都要单独抽出来，
      *     用 `File.pathSeparator` 串成一条路径。
-     *  2. 主 dex 就没必要抽了，直接用 APK 路径更省事。
+     *  2. **dex 不能留在插件目录**。插件目录在外部存储（`/storage/emulated/0/…`），
+     *     而 `dex2oat` 是独立进程、受 SELinux 限制读不了那里，表现为
+     *     「DexClassLoader 找不到 classes.dex」直接失败。所以统一落到
+     *     应用私有的 `codeCacheDir`，主 dex 也不例外。
+     *  3. 抽取结果按 APK 的修改时间做失效判断，插件升级后自动重抽。
      */
-    private fun resolveDexPath(pluginDir: File, apk: File): String {
+    private fun resolveDexPath(context: Context, pluginDir: File, apk: File): String {
         val dexNames = runCatching {
             java.util.zip.ZipFile(apk).use { zf ->
                 zf.entries().asSequence()
@@ -94,12 +98,13 @@ object PclSkinRendererLoader {
             return apk.absolutePath
         }
 
-        if (dexNames.size <= 1) return apk.absolutePath
+        if (dexNames.isEmpty()) return apk.absolutePath
 
-        val dir = File(pluginDir, "dex").apply { mkdirs() }
+        val dir = File(context.codeCacheDir, "pcl_skin_dex/" + pluginDir.name).apply { mkdirs() }
         val paths = dexNames.map { name ->
             val out = File(dir, name)
-            if (!out.isFile || out.lastModified() < apk.lastModified()) {
+            val stale = !out.isFile || out.length() == 0L || out.lastModified() < apk.lastModified()
+            if (stale) {
                 runCatching {
                     java.util.zip.ZipFile(apk).use { zf ->
                         val entry = zf.getEntry(name) ?: return@use

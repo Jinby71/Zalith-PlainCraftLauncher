@@ -389,7 +389,13 @@ fun PclMainScreen(
         // 必须在 apply 之前设好：apply 要按它去解插件声明的渲染器 dex。
         PclUiRuntime.assetDir = themeJson?.dir
         // 插件软玻璃渲染器要在运行时用 DexClassLoader 加载，需要 Context。
-        PclUiRuntime.appContext = context.applicationContext
+        //
+        // 这里刻意传 **Activity 本身**而不是 applicationContext：
+        // 插件想在自己被启用时盖一层启动画面，而「用 applicationContext 启动 Activity」
+        // 在 Android 10+ 会被判定为后台启动、静默拦掉；拿得到 Activity 就能直接往
+        // decorView 上挂 View，不用跨应用、没有限制、也没有切换动画。
+        // 目前所有读它的地方（codeCacheDir / contentResolver）Activity 都能满足。
+        PclUiRuntime.appContext = context
         PclUiRuntime.apply(themeJson?.json, themeJson?.id.orEmpty(), themeJson?.name)
         // 预热素材：`content://` 是跨进程现画的图，第一次读会走 IPC + 解码。
         // 留给组合期就会在首帧卡一下，这里先在 IO 线程把缓存填好。

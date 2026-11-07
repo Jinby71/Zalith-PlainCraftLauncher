@@ -18,6 +18,7 @@
 
 package com.zalith.pcl.game.plugin
 
+import android.content.Intent
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
@@ -811,10 +812,40 @@ object ZlPluginManager {
         runCatching { appliedFile.delete() }
     }
 
-    /** 卸载插件：先停用（还原文件），再删目录。 */
+    /**
+     * 卸载插件：先停用（还原文件），再删目录，最后请系统把插件那个 app 也卸掉。
+     *
+     * 插件本身是一个**独立安装的 APK**，删掉这里的目录之后，它在桌面/应用列表里
+     * 还会留一个只剩说明页的壳子 —— 用户看到「插件已删除」但应用还在，只会更困惑。
+     *
+     * 静默卸载需要 device owner 之类的系统权限，普通应用拿不到，所以这里只能拉起
+     * 系统的卸载确认框，由用户点一下。包名必须在删目录**之前**从 plugin.apk 读出来。
+     */
     fun remove(context: Context, plugin: ZlPlugin) {
+        val pkg = pluginPackageName(context, plugin.dir)
         if (plugin.enabled) revert(plugin)
         plugin.dir.deleteRecursively()
         Logger.info(TAG, "已删除插件 ${plugin.name}")
+        pkg?.let { requestUninstall(context, it) }
+    }
+
+    /** 从插件目录里的 APK 读出它的包名；读不到就返回 null（不是 APK / 文件已不在）。 */
+    private fun pluginPackageName(context: Context, dir: File): String? {
+        val apk = File(dir, "plugin.apk")
+        if (!apk.isFile) return null
+        return runCatching {
+            context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)?.packageName
+        }.getOrNull()
+    }
+
+    /** 拉起系统的卸载界面。失败只是没弹框，不能影响「删除插件」这个动作本身。 */
+    private fun requestUninstall(context: Context, pkg: String) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")).apply {
+                // 调用方可能是被 ContextThemeWrapper 包着的 Activity，统一用 NEW_TASK 更保险
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure { Logger.warning(TAG, "拉起卸载 $pkg 失败：$it") }
     }
 }

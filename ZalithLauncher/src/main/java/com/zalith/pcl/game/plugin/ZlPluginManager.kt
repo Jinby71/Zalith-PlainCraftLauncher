@@ -283,9 +283,9 @@ object ZlPluginManager {
     /**
      * 自带界面、并且已经启用的插件。
      *
-     * 首页的「Java 版 / 基岩版」这类切换**不能写死包名**：谁是插件、入口叫什么，
-     * 全部由插件自己的 `plugin.json`（`entry` / `label`）声明。启动器里没有任何一个
-     * 插件专用包名，装了什么就出现什么，卸掉就消失。
+     * 启动器只提供**接口**，不提供内容：入口有几个、叫什么，全部由插件自己的
+     * `plugin.json`（`entry` / `label`）声明。启动器里没有插件专用包名，
+     * 也没有任何一条针对某项功能的实现 —— 装了什么就出现什么，卸掉就消失。
      */
     fun entryPlugins(context: Context): List<ZlPlugin> =
         list(context).filter { it.enabled && it.entry }

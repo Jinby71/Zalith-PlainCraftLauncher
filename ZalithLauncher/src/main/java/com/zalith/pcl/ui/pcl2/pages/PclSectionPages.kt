@@ -598,8 +598,11 @@ private fun PclDownloadInstallPage(nav: PclNavController) {
 
     // ---- 分组与「最新版本」置顶项
     val grouped = remember(mcVersions) {
+        // `*_unobfuscated` 是 Mojang 发给开发者的「未混淆」构建：没有混淆、附带映射表，
+        // 用来调试和写模组，普通玩家装上跑不起来。PCL 原版也不列它，这里同样剔掉。
+        val visible = mcVersions.filter { !it.version.id.contains("unobfuscated", ignoreCase = true) }
         PclMcGroup.entries
-            .map { group -> group to mcVersions.filter { it.pclGroupOf() == group } }
+            .map { group -> group to visible.filter { it.pclGroupOf() == group } }
             .filter { it.second.isNotEmpty() }
     }
     val pinned = remember(grouped) {

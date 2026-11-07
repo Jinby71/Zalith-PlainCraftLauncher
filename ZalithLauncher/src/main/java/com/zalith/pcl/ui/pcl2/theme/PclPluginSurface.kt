@@ -59,6 +59,13 @@ fun Modifier.pclPluginSurface(
         .drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
             val androidClip = Path().apply { addOutline(outline) }.asAndroidPath()
+            // 把真实圆角告诉插件：它按这个半径画圆角玻璃，边缘光才会沿着圆角连续走。
+            // 一直传 0 的话，插件画的是矩形玻璃，圆角部分的高光被启动器裁掉 ——
+            // 直边上有一圈白边、圆角处却断掉，看着就是「一块块白圈」。
+            val cornerPx = runCatching {
+                (shape as? androidx.compose.foundation.shape.RoundedCornerShape)
+                    ?.topStart?.toPx(size, this) ?: 0f
+            }.getOrDefault(0f)
             val dst = RectF(0f, 0f, size.width, size.height)
             val paint = Paint().apply {
                 isAntiAlias = true
@@ -82,6 +89,7 @@ fun Modifier.pclPluginSurface(
                     backdropScreenW = soft.screenSize.width,
                     backdropScreenH = soft.screenSize.height,
                     params = params,
+                    cornerPx = cornerPx,
                 ) ?: return@onDrawBehind
 
                 val canvas = drawContext.canvas.nativeCanvas
@@ -106,6 +114,7 @@ private class PluginSurfaceCache {
     private var originX = Float.NaN
     private var originY = Float.NaN
     private var params: PclSkinGlassParams? = null
+    private var cornerPx = -1f
     private var bitmap: Bitmap? = null
 
     fun obtain(
@@ -119,12 +128,14 @@ private class PluginSurfaceCache {
         backdropScreenW: Int,
         backdropScreenH: Int,
         params: PclSkinGlassParams,
+        cornerPx: Float,
     ): Bitmap? {
         val fresh = bitmap != null &&
                 this.width == width &&
                 this.height == height &&
                 this.originX == originX &&
                 this.originY == originY &&
+                this.cornerPx == cornerPx &&
                 this.params == params
         if (fresh) return bitmap
 
@@ -140,8 +151,8 @@ private class PluginSurfaceCache {
                 backdropScreenH = backdropScreenH,
                 originX = originX,
                 originY = originY,
-                // 形状裁剪由启动器负责，插件只管画满整块矩形
-                cornerPx = 0f,
+                // 圆角交给插件：它按这个半径收边，边缘光才不会在圆角处断掉
+                cornerPx = cornerPx,
                 params = params,
             )
         }.getOrNull() ?: return null
@@ -153,6 +164,7 @@ private class PluginSurfaceCache {
         this.originX = originX
         this.originY = originY
         this.params = params
+        this.cornerPx = cornerPx
         return drawn
     }
 }

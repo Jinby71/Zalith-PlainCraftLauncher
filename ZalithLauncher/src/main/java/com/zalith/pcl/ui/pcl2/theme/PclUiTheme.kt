@@ -179,6 +179,14 @@ data class PclUiTheme(
     /** 皮肤名字（给设置页显示）。 */
     val name: String = "",
     val renderer: PclUiRenderer = PclUiRenderer.Glass,
+    /**
+     * 插件自定义软玻璃渲染器的全限定类名（`ui.json` 的 `rendererClass`）。
+     *
+     * 非空时，[pclSurface] 在软玻璃路径上优先把绘制交给插件（见
+     * [PclSkinRenderer] / [PclSkinRendererLoader]），启动器内置软玻璃作为兜底。
+     * 这样低版本玻璃的采样、模糊、高光这些观感细节可以随插件迭代，不必重编启动器。
+     */
+    val rendererClass: String? = null,
     /** 卡片底色。 */
     val cardColor: Color = Color.White,
     /** 卡片底色的不透明度（0..1）。 */
@@ -294,6 +302,8 @@ private data class ThemeJson(
     @SerializedName("id") val id: String? = null,
     @SerializedName("name") val name: String? = null,
     @SerializedName("renderer") val renderer: String? = null,
+    /** 插件自定义软玻璃渲染器的全限定类名；见 [PclSkinRenderer]。 */
+    @SerializedName("rendererClass") val rendererClass: String? = null,
     @SerializedName("card") val card: SideJson? = null,
     @SerializedName("sidebar") val sidebar: SideJson? = null,
     @SerializedName("corner") val corner: Float? = null,
@@ -330,6 +340,7 @@ fun parsePclUiTheme(json: String, fallbackId: String = ""): PclUiTheme {
         id = raw.id?.trim()?.ifBlank { null } ?: fallbackId,
         name = raw.name?.trim().orEmpty(),
         renderer = renderer,
+        rendererClass = raw.rendererClass?.trim()?.ifBlank { null },
         cardColor = raw.card?.color?.let(::parseHexColor) ?: def.cardColor,
         cardAlpha = raw.card?.alpha?.coerceIn(0f, 1f) ?: def.cardAlpha,
         sidebarColor = raw.sidebar?.color?.let(::parseHexColor),
@@ -473,6 +484,15 @@ fun pclGlassDiagnostics(theme: PclUiTheme?): String {
         append(" · 系统 API ").append(Build.VERSION.SDK_INT)
         append(" · 模糊 ").append(if (pclGlassSupported) "可用" else "不可用（需 Android 12）")
         append(" · 折射 ").append(if (pclRefractionSupported) "可用" else "不可用（需 Android 13）")
+        // 低版本没有 RenderEffect，玻璃是「插件画」还是「启动器画」直接决定观感，
+        // 这行让用户一眼看出插件渲染器到底接管了没有 —— 否则加载失败是静默的。
+        append(" · 低版本玻璃 ").append(
+            when {
+                theme.rendererClass.isNullOrBlank() -> "内置"
+                PclUiRuntime.skinRenderer != null -> "插件接管"
+                else -> "插件加载失败（已退回内置）"
+            },
+        )
     }
 }
 
@@ -490,6 +510,9 @@ object PclUiRuntime {
     /** 当前生效皮肤的名字（插件名），诊断用 —— 让用户一眼看出到底哪个主题在生效。 */
     var themeName by mutableStateOf<String?>(null)
         private set
+
+    /** 应用 Context：插件渲染器加载（DexClassLoader / 解 dex）时要用。 */
+    var appContext: android.content.Context? = null
 
     /**
      * 低版本用的「模糊背景底片」。
@@ -511,6 +534,14 @@ object PclUiRuntime {
     /** 当前皮肤插件的目录（`ui.json` 里的素材路径相对于它）。 */
     var assetDir by mutableStateOf<java.io.File?>(null)
 
+    /**
+     * 插件提供的软玻璃渲染器实例（`ui.json` 的 `rendererClass`）。
+     *
+     * null = 没装 / 加载失败，[pclSurface] 走启动器内置软玻璃。
+     */
+    var skinRenderer by mutableStateOf<PclSkinRenderer?>(null)
+        private set
+
     /** 按 id 找插件页面；找不到返回 null（宁可退回内置界面，也不显示空白）。 */
     fun pageById(id: String?): PclPluginPageSpec? =
         id?.let { key -> pages.firstOrNull { it.id == key } }
@@ -518,13 +549,20 @@ object PclUiRuntime {
     /** 由插件目录里的 `ui.json` 文本刷新一次。必须在 IO 线程调用。 */
     fun apply(json: String?, id: String = "", name: String? = null) {
         if (name != null) themeName = name
-        theme = json?.let { parsePclUiTheme(it, id) }
+        val parsed = json?.let { parsePclUiTheme(it, id) }
+        theme = parsed
+        // 插件声明了 rendererClass 才去解 dex —— 没声明的主题（绝大多数）不会有
+        // 任何 dex 加载开销，也不会多建目录。
+        skinRenderer = parsed?.rendererClass?.let { cls ->
+            PclSkinRendererLoader.load(assetDir, cls)
+        }
     }
 
     fun clear() {
         theme = null
         themeName = null
         soft = null
+        skinRenderer = null
     }
 }
 
@@ -610,6 +648,17 @@ fun Modifier.pclSurface(
     if (backdrop == null || !pclGlassSupported) {
         val soft = PclUiRuntime.soft
         if (soft != null) {
+            // 插件声明了 rendererClass 就由它来画 —— 低版本（Android 11 及以下）
+            // 的玻璃观感从此归插件管，修采样、调折射都只重发插件。
+            PclUiRuntime.skinRenderer?.let { renderer ->
+                return this.pclPluginSurface(
+                    renderer = renderer,
+                    role = role,
+                    params = theme.glass.toSkinParams(color, alpha),
+                    shape = shape,
+                    soft = soft,
+                )
+            }
             return this.pclSoftGlass(
                 theme = theme,
                 soft = soft,

@@ -381,9 +381,12 @@ fun PclMainScreen(
         val themeJson = withContext(Dispatchers.IO) {
             runCatching { ZlPluginManager.activeTheme(context) }.getOrNull()
         }
-        PclUiRuntime.apply(themeJson?.json, themeJson?.id.orEmpty(), themeJson?.name)
         // `ui.json` 里的素材路径都相对于插件目录；换插件/升级后图片可能变了，缓存跟着清。
+        // 必须在 apply 之前设好：apply 要按它去解插件声明的渲染器 dex。
         PclUiRuntime.assetDir = themeJson?.dir
+        // 插件软玻璃渲染器要在运行时用 DexClassLoader 加载，需要 Context。
+        PclUiRuntime.appContext = context.applicationContext
+        PclUiRuntime.apply(themeJson?.json, themeJson?.id.orEmpty(), themeJson?.name)
         // 预热素材：`content://` 是跨进程现画的图，第一次读会走 IPC + 解码。
         // 留给组合期就会在首帧卡一下，这里先在 IO 线程把缓存填好。
         withContext(Dispatchers.IO) {

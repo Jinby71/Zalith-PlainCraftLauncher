@@ -76,6 +76,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.zalith.pcl.ui.pcl2.theme.LocalPclUiTheme
+import com.zalith.pcl.ui.pcl2.theme.roleCornerOr
 import com.zalith.pcl.ui.pcl2.theme.LocalPclPalette
 import com.zalith.pcl.ui.pcl2.theme.PclDimens
 import com.zalith.pcl.ui.pcl2.theme.PclMotion
@@ -669,12 +671,17 @@ fun PclDialogButton(
         }
     )
 
+    // 弹窗按钮是页面上最显眼的一块圆角，交给主题（`roles.button.corner`）。
+    val buttonShape = RoundedCornerShape(
+        LocalPclUiTheme.current.roleCornerOr("button", PclDimens.buttonCorner),
+    )
+
     Box(
         modifier = modifier
             .heightIn(min = PclDimens.buttonHeight)
-            .clip(RoundedCornerShape(PclDimens.buttonCorner))
+            .clip(buttonShape)
             .background(background)
-            .border(pclHairline(), borderColor, RoundedCornerShape(PclDimens.buttonCorner))
+            .border(pclHairline(), borderColor, buttonShape)
             .clickable(
                 enabled = enabled,
                 interactionSource = interaction,
@@ -738,6 +745,12 @@ fun PclOutlinedTextField(
 ) {
     val p = pclPalette
     val focusManager = LocalFocusManager.current
+    // 输入框的圆角同样归主题（`roles.input.corner`）；调用方显式传了别的形状就听调用方。
+    val fieldShape = if (shape == RoundedCornerShape(PclDimens.buttonCorner)) {
+        RoundedCornerShape(LocalPclUiTheme.current.roleCornerOr("input", PclDimens.buttonCorner))
+    } else {
+        shape
+    }
 
     Column(modifier = modifier) {
         if (label != null) {
@@ -768,7 +781,7 @@ fun PclOutlinedTextField(
             singleLine = singleLine,
             maxLines = maxLines,
             minLines = minLines,
-            shape = shape,
+            shape = fieldShape,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = p.color1,
                 unfocusedTextColor = p.color1,

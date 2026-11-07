@@ -31,6 +31,8 @@ package com.zalith.pcl.ui.pcl2.theme
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -740,7 +742,54 @@ enum class PclSurface {
  * @param backdrop 背景底片；null 时不做模糊
  * @param fallbackColor 没装皮肤（theme == null）时用 PCL 原本的颜色
  */
+/**
+ * 用主题给这个角色声明的圆角，替换掉调用方写死的形状。
+ *
+ * 为什么要在这里统一过一遍：PCL 里几十处控件都把圆角硬编码在 `shape` 参数里
+ * （顶栏胶囊 25dp、复选框 3dp、滑条 13dp、短胶囊按钮 20.8dp…），
+ * 主题就算写了 `roles.pill.corner = 0` 也碰不到它们 —— 于是「大直角」只在大卡片上生效，
+ * 顶栏和一堆小控件还是圆的。外观归主题，就得在这里收口。
+ *
+ * 只处理四角等大的 `RoundedCornerShape`；`CircleShape`（头像是天生的圆）原样返回。
+ */
+private fun PclUiTheme?.shapeForRole(role: String, shape: Shape): Shape {
+    val theme = this ?: return shape
+    if (role.isEmpty()) return shape
+    val corner = theme.roles[role]?.corner ?: theme.corner ?: return shape
+    if (shape !is RoundedCornerShape) return shape
+    if (shape === CircleShape) return shape
+    return RoundedCornerShape(corner.dp)
+}
+
+/**
+ * 一块皮肤表面。
+ *
+ * 调用方给的 [shape] 只是「默认形状」：只要主题在 `roles.<role>.corner` 里声明了圆角，
+ * 就以主题为准（见 [shapeForRole]）。
+ */
 fun Modifier.pclSurface(
+    theme: PclUiTheme?,
+    backdrop: Backdrop?,
+    shape: Shape,
+    surface: PclSurface = PclSurface.Card,
+    fallbackColor: Color = Color.White,
+    colorOverride: Color? = null,
+    alphaScale: Float = 1f,
+    role: String = "",
+    state: PclSkinState = PclSkinState(),
+): Modifier = this.pclSurfaceImpl(
+    theme = theme,
+    backdrop = backdrop,
+    shape = theme.shapeForRole(role, shape),
+    surface = surface,
+    fallbackColor = fallbackColor,
+    colorOverride = colorOverride,
+    alphaScale = alphaScale,
+    role = role,
+    state = state,
+)
+
+private fun Modifier.pclSurfaceImpl(
     theme: PclUiTheme?,
     backdrop: Backdrop?,
     shape: Shape,
@@ -969,10 +1018,11 @@ fun Modifier.pclSurfaceBordered(
     alphaScale: Float = 1f,
     role: String = "",
 ): Modifier {
+    val shaped = theme.shapeForRole(role, shape)
     val base = pclSurface(
         theme = theme,
         backdrop = backdrop,
-        shape = shape,
+        shape = shaped,
         surface = surface,
         fallbackColor = fillColor,
         colorOverride = fillColor,
@@ -989,7 +1039,7 @@ fun Modifier.pclSurfaceBordered(
             !theme.glassEnabledFor(role)
     if (!drawBorder) return base
     val color = theme?.border?.color?.copy(alpha = theme.border.alpha) ?: borderColor
-    return base.border(borderWidth, color, shape)
+    return base.border(borderWidth, color, shaped)
 }
 
 /** 皮肤给侧栏用的底色：没装皮肤或没写 sidebar 就返回 null（调用方用原色）。 */
@@ -1024,7 +1074,14 @@ fun PclUiTheme?.roleAlpha(role: String): Float? = this?.roles?.get(role)?.alpha
 fun PclUiTheme?.roleCornerOr(
     role: String,
     default: androidx.compose.ui.unit.Dp,
-): androidx.compose.ui.unit.Dp = this?.roles?.get(role)?.corner?.dp ?: default
+): androidx.compose.ui.unit.Dp {
+    val theme = this ?: return default
+    theme.roles[role]?.corner?.let { return it.dp }
+    // 角色没单独写，就听全局 `corner`。
+    // 这一层兜底很关键：以前没写角色就退回 PCL 原值，于是主题声明了「全直角」
+    // 却还有一堆控件保持原样 —— 用户看到的就是「大直角又飞了」。
+    return theme.corner?.dp ?: default
+}
 
 /** 皮肤覆盖的按钮圆角。 */
 fun PclUiTheme?.buttonCornerOr(default: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =

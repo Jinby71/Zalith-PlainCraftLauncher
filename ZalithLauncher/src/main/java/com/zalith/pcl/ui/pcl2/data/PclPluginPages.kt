@@ -49,6 +49,13 @@ data class PclPluginPageSpec(
     /** 左栏条目（可选）；为空时这一页没有左栏。 */
     val leftLabels: List<String> = emptyList(),
     val blocks: List<PclPluginBlock> = emptyList(),
+    /**
+     * 这一页是哪个插件给的（[ZlPlugin] 的 id）。
+     *
+     * `{"type":"launch"}` 要靠它找到插件自己的 app —— 页面本身不知道谁写的，
+     * 只能由加载方标上去。
+     */
+    val pluginId: String = "",
 )
 
 /** 页面内容的基本单元。 */
@@ -92,6 +99,14 @@ sealed interface PclPluginAction {
 
     /** 切到启动器的内置版块（`home` / `download` / `link` / `setup` / `other`）。 */
     data class Section(val value: String) : PclPluginAction
+
+    /**
+     * 打开这个插件自己的界面（它本身是一个装好的 app）。
+     *
+     * 页面是**数据**，只能表达「跳到哪一页」；真正要干活的那套 UI 在插件自己的
+     * Activity 里。这个动作就是两者之间的门：启动器只负责把插件拉到前台。
+     */
+    data object Launch : PclPluginAction
 }
 
 /* ---------------------------------------------------------------- 解析 */
@@ -131,7 +146,7 @@ private val pagesGson = Gson()
 private const val MAX_BLOCKS = 400
 
 /** 解析 `pages.json`；解析失败返回空表（插件写错不该让启动器崩）。 */
-fun parsePclPluginPages(json: String): List<PclPluginPageSpec> {
+fun parsePclPluginPages(json: String, pluginId: String = ""): List<PclPluginPageSpec> {
     val raw = runCatching { pagesGson.fromJson(json, PagesJson::class.java) }.getOrNull()
     val pages = raw?.pages ?: return emptyList()
     var budget = MAX_BLOCKS
@@ -141,6 +156,7 @@ fun parsePclPluginPages(json: String): List<PclPluginPageSpec> {
         PclPluginPageSpec(
             id = id,
             title = title,
+            pluginId = pluginId,
             leftLabels = page.left?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
             blocks = page.blocks.orEmpty().mapNotNull { block ->
                 if (budget <= 0) return@mapNotNull null
@@ -176,5 +192,6 @@ private fun ActionJson.toAction(): PclPluginAction? = when (type?.trim()?.lowerc
     "hint", "toast" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Hint(it) }
     "page" -> id?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Page(it) }
     "section" -> value?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Section(it) }
+    "launch", "app", "open" -> PclPluginAction.Launch
     else -> null
 }

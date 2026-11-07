@@ -409,7 +409,7 @@ fun PclMainScreen(
         // 而渲染版块的地方拿不到插件目录，所以在这里读一次、存进全局。
         PclUiRuntime.pages = withContext(Dispatchers.IO) {
             runCatching {
-                ZlPluginManager.activePages(context).flatMap { parsePclPluginPages(it.json) }
+                ZlPluginManager.activePages(context).flatMap { parsePclPluginPages(it.json, it.pluginId) }
             }.getOrDefault(emptyList())
         }
         PclLoginSettings.load(context)

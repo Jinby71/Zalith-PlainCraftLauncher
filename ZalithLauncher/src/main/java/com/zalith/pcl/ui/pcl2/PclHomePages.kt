@@ -162,9 +162,11 @@ import com.zalith.pcl.ui.pcl2.data.rememberRemoteText
 import com.zalith.pcl.ui.pcl2.data.PclHomeType
 import com.zalith.pcl.ui.pcl2.data.PclRuntime
 import com.zalith.pcl.ui.pcl2.pages.pclInstanceVersionPage
+import com.zalith.pcl.ui.pcl2.pages.pclPluginSubPage
 import com.zalith.pcl.ui.pcl2.pages.pclVersionSelectPage
 import com.zalith.pcl.ui.pcl2.theme.PclMotion
 import com.zalith.pcl.ui.pcl2.theme.PclTextStyle
+import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
 import com.zalith.pcl.ui.pcl2.theme.pclPalette
 import com.zalith.pcl.ui.toAndroidString
 import com.zalith.pcl.utils.network.openLinkInternal
@@ -489,13 +491,10 @@ private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime)
                     modifier = Modifier.padding(horizontal = 4.dp),
                     onClick = {
                         selectEntry(plugin.id)
-                        // 插件自带界面：切过去就直接把它拉到前台
-                        if (!ZlPluginManager.launch(context, plugin)) {
-                            PclHintHost.push(
-                                "没有找到「${plugin.name}」的应用，重新装一次插件 APK 再试。",
-                                PclHintTheme.Red,
-                            )
-                        }
+                        // 只在启动器里切：插件给了页面，就地把那一页推上来。
+                        // 页面是插件写的（pages.json），启动器只负责渲染积木。
+                        val page = PclUiRuntime.pages.firstOrNull { it.pluginId == plugin.id }
+                        if (page != null) nav.push(pclPluginSubPage(page))
                     },
                 )
             }
@@ -516,6 +515,13 @@ private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime)
                     fontSize = 12,
                     color = p.gray2,
                 )
+                if (PclUiRuntime.pages.any { it.pluginId == selected.id }) {
+                    PclText(
+                        text = "这个插件自带页面，点上面的胶囊就能在启动器里打开。",
+                        fontSize = 11,
+                        color = p.gray3,
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
                 PclButton(
                     text = "打开$title",

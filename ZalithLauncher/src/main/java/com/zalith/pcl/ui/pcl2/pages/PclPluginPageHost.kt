@@ -42,6 +42,7 @@ import com.zalith.pcl.ui.pcl2.components.PclHintTheme
 import com.zalith.pcl.ui.pcl2.components.PclSwitchItem
 import com.zalith.pcl.ui.pcl2.data.PclPluginAction
 import com.zalith.pcl.ui.pcl2.data.PclPluginBlock
+import com.zalith.pcl.game.plugin.ZlPluginManager
 import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
 import com.zalith.pcl.ui.pcl2.theme.PclTextStyle
 import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
@@ -91,7 +92,7 @@ fun PclPluginPageInline(spec: PclPluginPageSpec) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        spec.blocks.forEach { PclPluginBlockView(it, all, nav::push, nav::go) }
+        spec.blocks.forEach { PclPluginBlockView(it, all, spec.pluginId, nav::push, nav::go) }
     }
 }
 
@@ -99,6 +100,7 @@ fun PclPluginPageInline(spec: PclPluginPageSpec) {
 private fun PclPluginBlockView(
     block: PclPluginBlock,
     all: List<PclPluginPageSpec>,
+    pluginId: String,
     onPush: (PclSubPage) -> Unit,
     onSection: (PclSection) -> Unit,
 ) {
@@ -123,7 +125,7 @@ private fun PclPluginBlockView(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                block.blocks.forEach { PclPluginBlockView(it, all, onPush, onSection) }
+                block.blocks.forEach { PclPluginBlockView(it, all, pluginId, onPush, onSection) }
             }
         }
 
@@ -133,14 +135,14 @@ private fun PclPluginBlockView(
         ) {
             block.blocks.forEach { child ->
                 Box(modifier = Modifier.weight(1f, fill = false)) {
-                    PclPluginBlockView(child, all, onPush, onSection)
+                    PclPluginBlockView(child, all, pluginId, onPush, onSection)
                 }
             }
         }
 
         is PclPluginBlock.Button -> PclButton(
             text = block.text,
-            onClick = { runPclPluginAction(block.action, all, onPush, onSection) },
+            onClick = { runPclPluginAction(block.action, all, pluginId, onPush, onSection) },
         )
 
         is PclPluginBlock.Switch -> {
@@ -153,7 +155,7 @@ private fun PclPluginBlockView(
                 modifier = Modifier.fillMaxWidth(),
                 onCheckedChange = {
                     checked = it
-                    runPclPluginAction(block.action, all, onPush, onSection)
+                    runPclPluginAction(block.action, all, pluginId, onPush, onSection)
                 },
             )
         }
@@ -169,6 +171,7 @@ private fun PclPluginBlockView(
 private fun runPclPluginAction(
     action: PclPluginAction?,
     all: List<PclPluginPageSpec>,
+    pluginId: String,
     onPush: (PclSubPage) -> Unit,
     onSection: (PclSection) -> Unit,
 ) {
@@ -184,6 +187,18 @@ private fun runPclPluginAction(
             "setup" -> onSection(PclSection.Setup)
             "other" -> onSection(PclSection.Other)
             else -> Unit
+        }
+
+        // 打开插件自己的界面：页面是数据，真正的 UI 在插件的 Activity 里，
+        // 启动器只负责把它拉到前台，不参与它做什么。
+        is PclPluginAction.Launch -> {
+            val ctx = PclUiRuntime.appContext
+            val plugin = ctx?.let { c ->
+                runCatching { ZlPluginManager.list(c).firstOrNull { it.id == pluginId } }.getOrNull()
+            }
+            if (ctx == null || plugin == null || !ZlPluginManager.launch(ctx, plugin)) {
+                PclHintHost.push("没有找到这个插件的界面，重新装一次插件 APK 再试。", PclHintTheme.Red)
+            }
         }
     }
 }

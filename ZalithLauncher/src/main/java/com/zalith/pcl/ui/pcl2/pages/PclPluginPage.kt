@@ -88,7 +88,7 @@ fun PclPluginPanel() {
     fun reload() {
         plugins = runCatching { ZlPluginManager.list(context) }.getOrDefault(emptyList())
         PclUiRuntime.pages = runCatching {
-            ZlPluginManager.activePages(context).flatMap { parsePclPluginPages(it.json) }
+            ZlPluginManager.activePages(context).flatMap { parsePclPluginPages(it.json, it.pluginId) }
         }.getOrDefault(emptyList())
     }
 

@@ -485,8 +485,13 @@ object ZlPluginManager {
             val apk = File(sourceDir)
             if (!apk.isFile) return@forEach
 
-            // 用「包名 + 版本号」当指纹：应用升级后会重新识别一次
-            val key = "pkg:" + pkg + ":" + info.longVersionCode
+            // 指纹 = 包名 + 版本号 + APK 自身的大小/时间。
+            //
+            // 只认「包名 + 版本号」会漏掉**同一个 versionCode 重新打包**的情况 ——
+            // 插件常这么干（改个清单、换个图标，版本号忘了加）。此时新包装上去了，
+            // 旧的「不是插件」记录还在，于是再也认不出来，表现就是「导入了但不显示」。
+            val key = "pkg:" + pkg + ":" + info.longVersionCode + ":" +
+                    apk.length() + ":" + apk.lastModified()
             if (records.any { it.path == key }) return@forEach
             if (!looksLikePlugin(apk)) {
                 // 普通应用也记一笔：否则每次冷启动都要把几百个 APK 重新拆一遍找清单

@@ -1884,6 +1884,9 @@ private fun PclSplashOverlay(spec: PclSplashSpec) {
     val image = remember(spec.image, PclUiRuntime.assetDir) {
         spec.image?.let { runCatching { PclAssetLoader.load(PclAssetSpec(src = it)) }.getOrNull() }
     }
+    val icon = remember(spec.icon, PclUiRuntime.assetDir) {
+        spec.icon?.let { runCatching { PclAssetLoader.load(PclAssetSpec(src = it)) }.getOrNull() }
+    }
 
     LaunchedEffect(spec) {
         alpha.animateTo(1f, tween(durationMillis = 360))
@@ -1894,7 +1897,7 @@ private fun PclSplashOverlay(spec: PclSplashSpec) {
 
     if (done) return
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(spec.background)
@@ -1908,9 +1911,24 @@ private fun PclSplashOverlay(spec: PclSplashSpec) {
                     done = true
                 }
             },
-        contentAlignment = Alignment.Center,
     ) {
-        if (image != null) {
+        // 图标走 dp（已经跟着 PclTheme 的 density 一起缩放了），再加一道上限：
+        // 不超过短边的 26%。横屏的模拟器只有 200dp 高，光按 104dp 画会占掉半个屏幕。
+        val iconSide = minOf(spec.iconSizeDp.dp, maxHeight * 0.26f, maxWidth * 0.26f)
+
+        // 里面再套一层普通 Box：`matchParentSize` / `align` 是 BoxScope 的扩展，
+        // BoxWithConstraints 的 scope 拿不到它们。
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (icon != null) {
+            // 图标是「一个小图形」，不像整屏图那样按屏幕比例撑满，横竖屏看到的大小一致。
+            // 也正因为是图标，不配文字。
+            Image(
+                bitmap = icon,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(iconSide),
+            )
+        } else if (image != null) {
             Image(
                 bitmap = image,
                 contentDescription = null,
@@ -1947,14 +1965,18 @@ private fun PclSplashOverlay(spec: PclSplashSpec) {
         }
 
         // 底部一条发丝线。没有它，静止画面会让人以为卡住了。
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 64.dp)
-                .width(84.dp)
-                .height(1.dp)
-                .background(spec.accent.copy(alpha = 0.38f)),
-        )
+        // 纯图标模式要的是干净，不画。
+        if (icon == null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 64.dp)
+                    .width(84.dp)
+                    .height(1.dp)
+                    .background(spec.accent.copy(alpha = 0.38f)),
+            )
+        }
+        }
     }
 }
 

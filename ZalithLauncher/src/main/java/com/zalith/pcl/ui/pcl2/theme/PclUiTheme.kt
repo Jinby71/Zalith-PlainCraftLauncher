@@ -207,6 +207,16 @@ data class PclSlotOverride(
 data class PclSplashSpec(
     /** 铺满整屏的图片（相对插件目录）；null = 只有底色 + 品牌标记。 */
     val image: String? = null,
+    /**
+     * 图标（相对插件目录）：按 [iconSizeDp] 固定尺寸居中画，**不铺满屏幕**。
+     *
+     * 和 [image] 的区别就是缩放方式：整屏图按屏幕比例撑满，横屏会被放大得很夸张；
+     * 图标走 dp，跟着界面缩放一起变，横竖屏看到的都是同一个大小。
+     * 配了它就不再画标题、副标题和底部发丝线。
+     */
+    val icon: String? = null,
+    /** 图标边长（dp）。 */
+    val iconSizeDp: Float = 104f,
     /** 底色，图片没铺满或没配图片时露出来的就是它。 */
     val background: Color = Color(0xFF0A1020),
     /** 品牌标记的主色（渐变起点），也用来画底部那条细线。 */
@@ -368,6 +378,8 @@ private data class BorderJson(
 
 private data class SplashJson(
     @SerializedName("image") val image: String? = null,
+    @SerializedName("icon") val icon: String? = null,
+    @SerializedName("iconSize") val iconSize: Float? = null,
     @SerializedName("background") val background: String? = null,
     @SerializedName("accent") val accent: String? = null,
     @SerializedName("foreground") val foreground: String? = null,
@@ -449,6 +461,8 @@ fun parsePclUiTheme(json: String, fallbackId: String = ""): PclUiTheme {
             val bg = sp.background?.let(::parseHexColor) ?: Color(0xFF0A1020)
             PclSplashSpec(
                 image = sp.image?.trim()?.ifBlank { null },
+                icon = sp.icon?.trim()?.ifBlank { null },
+                iconSizeDp = (sp.iconSize ?: 104f).coerceIn(40f, 260f),
                 background = bg,
                 accent = sp.accent?.let(::parseHexColor) ?: Color(0xFF8FE3FF),
                 // 没写就用底色亮度反推：浅底给近黑、深底给白，别让字糊在背景里

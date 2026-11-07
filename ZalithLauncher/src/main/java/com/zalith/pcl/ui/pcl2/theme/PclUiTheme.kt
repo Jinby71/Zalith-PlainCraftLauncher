@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -208,6 +209,10 @@ data class PclSplashSpec(
     val image: String? = null,
     /** 底色，图片没铺满或没配图片时露出来的就是它。 */
     val background: Color = Color(0xFF0A1020),
+    /** 品牌标记的主色（渐变起点），也用来画底部那条细线。 */
+    val accent: Color = Color(0xFF8FE3FF),
+    /** 文字颜色。深色底给白、浅色底给深灰，否则读不清。 */
+    val foreground: Color = Color.White,
     /** 标题；null = 不画。 */
     val title: String? = null,
     /** 副标题；null = 不画。 */
@@ -216,6 +221,13 @@ data class PclSplashSpec(
     val durationMs: Int = 1800,
     /** 淡出时长（毫秒）。 */
     val fadeMs: Int = 340,
+    /**
+     * 品牌标记的圆角（dp）。
+     *
+     * 这个值决定「像哪个主题」：液态玻璃是饱满的 2x 圆角，Claude 那种终端风
+     * 只留一点点，看起来是块方正的牌子。
+     */
+    val cornerDp: Float = 20f,
 )
 
 /**
@@ -357,6 +369,9 @@ private data class BorderJson(
 private data class SplashJson(
     @SerializedName("image") val image: String? = null,
     @SerializedName("background") val background: String? = null,
+    @SerializedName("accent") val accent: String? = null,
+    @SerializedName("foreground") val foreground: String? = null,
+    @SerializedName("corner") val corner: Float? = null,
     @SerializedName("title") val title: String? = null,
     @SerializedName("subtitle") val subtitle: String? = null,
     @SerializedName("durationMs") val durationMs: Int? = null,
@@ -431,9 +446,15 @@ fun parsePclUiTheme(json: String, fallbackId: String = ""): PclUiTheme {
             .filter { it.isNotEmpty() && it != "launch" && it != "home" }
             .toSet(),
         splash = raw.splash?.let { sp ->
+            val bg = sp.background?.let(::parseHexColor) ?: Color(0xFF0A1020)
             PclSplashSpec(
                 image = sp.image?.trim()?.ifBlank { null },
-                background = sp.background?.let(::parseHexColor) ?: Color(0xFF0A1020),
+                background = bg,
+                accent = sp.accent?.let(::parseHexColor) ?: Color(0xFF8FE3FF),
+                // 没写就用底色亮度反推：浅底给近黑、深底给白，别让字糊在背景里
+                foreground = sp.foreground?.let(::parseHexColor)
+                    ?: if (bg.luminance() > 0.55f) Color(0xFF141413) else Color.White,
+                cornerDp = (sp.corner ?: 20f).coerceIn(0f, 40f),
                 title = sp.title?.trim()?.ifBlank { null },
                 subtitle = sp.subtitle?.trim()?.ifBlank { null },
                 durationMs = (sp.durationMs ?: 1800).coerceIn(300, 8000),

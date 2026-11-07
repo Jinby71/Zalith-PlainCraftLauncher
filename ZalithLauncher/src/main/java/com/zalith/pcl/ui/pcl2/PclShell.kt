@@ -1917,51 +1917,86 @@ private fun PclSplashOverlay(spec: PclSplashSpec) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
             )
-        }
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                SplashMark(spec)
 
-        // 没有配图时画一块品牌标记，免得整屏只有纯色
-        if (image == null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = (-40).dp)
-                    .size(92.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
-                    .background(
-                        androidx.compose.ui.graphics.Brush.linearGradient(
-                            listOf(Color(0xFF8FE3FF), Color(0xFF7C8BFF)),
+                spec.title?.let {
+                    Spacer(Modifier.height(26.dp))
+                    Text(
+                        text = it,
+                        style = PclTextStyle.listTitle(pclPalette).copy(
+                            color = spec.foreground,
+                            fontSize = 21.sp,
+                            letterSpacing = 0.4.sp,
                         ),
-                    ),
-            )
+                    )
+                }
+                spec.subtitle?.let {
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        text = it,
+                        style = PclTextStyle.base(pclPalette).copy(
+                            color = spec.foreground.copy(alpha = 0.5f),
+                            fontSize = 10.sp,
+                            letterSpacing = 5.sp,
+                        ),
+                    )
+                }
+            }
         }
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // 底部一条发丝线。没有它，静止画面会让人以为卡住了。
+        Box(
             modifier = Modifier
-                .align(Alignment.Center)
-                .offset(y = if (image == null) 60.dp else 0.dp),
-        ) {
-            spec.title?.let {
-                Text(
-                    text = it,
-                    style = PclTextStyle.listTitle(pclPalette).copy(
-                        color = Color.White,
-                        fontSize = androidx.compose.ui.unit.TextUnit(
-                            24f,
-                            androidx.compose.ui.unit.TextUnitType.Sp,
-                        ),
-                    ),
-                )
-            }
-            spec.subtitle?.let {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = it,
-                    style = PclTextStyle.base(pclPalette).copy(
-                        color = Color.White.copy(alpha = 0.62f),
-                    ),
-                )
-            }
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 64.dp)
+                .width(84.dp)
+                .height(1.dp)
+                .background(spec.accent.copy(alpha = 0.38f)),
+        )
+    }
+}
+
+/**
+ * 品牌标记：一块方正的小牌子，中间一个镂空的 Z。
+ *
+ * 圆角由 `ui.json` 的 `splash.corner` 控制 —— 液态玻璃给 20 会显得饱满，
+ * Claude 这种终端风给 4~8 就是一块干脆的方牌。
+ */
+@Composable
+private fun SplashMark(spec: PclSplashSpec) {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(84.dp)) {
+        val side = size.minDimension
+        val inset = side * 0.08f
+        val box = side - inset * 2f
+        val radius = androidx.compose.ui.geometry.CornerRadius(spec.cornerDp.dp.toPx())
+
+        drawRoundRect(
+            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                colors = listOf(spec.accent, spec.accent.copy(alpha = 0.70f)),
+                start = androidx.compose.ui.geometry.Offset(inset, inset),
+                end = androidx.compose.ui.geometry.Offset(inset + box, inset + box),
+            ),
+            topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+            size = androidx.compose.ui.geometry.Size(box, box),
+            cornerRadius = radius,
+        )
+
+        val z = androidx.compose.ui.graphics.Path().apply {
+            moveTo(inset + box * 0.30f, inset + box * 0.30f)
+            lineTo(inset + box * 0.70f, inset + box * 0.30f)
+            lineTo(inset + box * 0.30f, inset + box * 0.70f)
+            lineTo(inset + box * 0.70f, inset + box * 0.70f)
         }
+        drawPath(
+            path = z,
+            color = spec.background,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = side * 0.070f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round,
+            ),
+        )
     }
 }

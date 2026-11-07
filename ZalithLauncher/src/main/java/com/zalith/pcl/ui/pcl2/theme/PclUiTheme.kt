@@ -195,6 +195,30 @@ data class PclSlotOverride(
 )
 
 /**
+ * 启动画面（`ui.json` 的 `splash` 段）。
+ *
+ * 为什么放在启动器里画而不是插件自己弹 Activity：
+ *   插件往窗口上盖东西需要 Activity，而用 `applicationContext` 启动界面在 Android 10+
+ *   会被当成「后台启动」静默拦掉。把这块能力收进启动器，插件只提供数据，
+ *   就绕开了权限、跨应用、ROM 拦截这一整串问题 —— 这也是插件协议一贯的做法：
+ *   插件是数据包，怎么画由启动器决定。
+ */
+data class PclSplashSpec(
+    /** 铺满整屏的图片（相对插件目录）；null = 只有底色 + 品牌标记。 */
+    val image: String? = null,
+    /** 底色，图片没铺满或没配图片时露出来的就是它。 */
+    val background: Color = Color(0xFF0A1020),
+    /** 标题；null = 不画。 */
+    val title: String? = null,
+    /** 副标题；null = 不画。 */
+    val subtitle: String? = null,
+    /** 停留时长（毫秒）。 */
+    val durationMs: Int = 1800,
+    /** 淡出时长（毫秒）。 */
+    val fadeMs: Int = 340,
+)
+
+/**
  * 一套皮肤。
  *
  * 全部有默认值：插件只写 `{"renderer":"glass"}` 也能用 —— 默认就是液态玻璃的手感。
@@ -231,6 +255,8 @@ data class PclUiTheme(
      * 写 `all` 则所有版本都由插件画，启动器不再自绘表面。
      */
     val rendererScope: PclRendererScope = PclRendererScope.Limited,
+    /** 启动画面；null = 不显示。 */
+    val splash: PclSplashSpec? = null,
     /** 卡片底色。 */
     val cardColor: Color = Color.White,
     /** 卡片底色的不透明度（0..1）。 */
@@ -328,6 +354,15 @@ private data class BorderJson(
     @SerializedName("alpha") val alpha: Float? = null,
 )
 
+private data class SplashJson(
+    @SerializedName("image") val image: String? = null,
+    @SerializedName("background") val background: String? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("subtitle") val subtitle: String? = null,
+    @SerializedName("durationMs") val durationMs: Int? = null,
+    @SerializedName("fadeMs") val fadeMs: Int? = null,
+)
+
 private data class LayoutSlotJson(
     @SerializedName("left") val left: String? = null,
     @SerializedName("content") val content: String? = null,
@@ -352,6 +387,8 @@ private data class ThemeJson(
     @SerializedName("rendererScope") val rendererScope: String? = null,
     /** 需要隐藏的内置版块 key。 */
     @SerializedName("hidden") val hidden: List<String>? = null,
+    /** 启动画面配置。 */
+    @SerializedName("splash") val splash: SplashJson? = null,
     @SerializedName("card") val card: SideJson? = null,
     @SerializedName("sidebar") val sidebar: SideJson? = null,
     @SerializedName("corner") val corner: Float? = null,
@@ -393,6 +430,16 @@ fun parsePclUiTheme(json: String, fallbackId: String = ""): PclUiTheme {
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() && it != "launch" && it != "home" }
             .toSet(),
+        splash = raw.splash?.let { sp ->
+            PclSplashSpec(
+                image = sp.image?.trim()?.ifBlank { null },
+                background = sp.background?.let(::parseHexColor) ?: Color(0xFF0A1020),
+                title = sp.title?.trim()?.ifBlank { null },
+                subtitle = sp.subtitle?.trim()?.ifBlank { null },
+                durationMs = (sp.durationMs ?: 1800).coerceIn(300, 8000),
+                fadeMs = (sp.fadeMs ?: 340).coerceIn(0, 2000),
+            )
+        },
         rendererScope = when (raw.rendererScope?.trim()?.lowercase()) {
             "all", "always", "every" -> PclRendererScope.All
             else -> PclRendererScope.Limited

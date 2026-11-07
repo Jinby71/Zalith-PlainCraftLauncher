@@ -62,6 +62,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.rememberCoroutineScope
+import com.zalith.pcl.ui.pcl2.theme.PclAssetSpec
+import com.zalith.pcl.ui.pcl2.theme.PclSplashSpec
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -469,6 +472,12 @@ fun PclMainScreen(
         val activePalette = if (PclUiRuntime.theme?.neutralPalette == true) PclPalettes.liquidGlass else palette
         PclTheme(activePalette, uiScale) {
             PclMainContent(nav, runtime, backgroundOpacity)
+        }
+
+        // 插件声明的启动画面：盖在最上层，首帧之后淡入、停留、淡出。
+        // 用 spec 当 key：换插件或改配置时重新播一遍，不会停在「已结束」的状态。
+        PclUiRuntime.theme?.splash?.let { spec ->
+            androidx.compose.runtime.key(spec) { PclSplashOverlay(spec) }
         }
 
         // 彩蛋的出口。
@@ -1857,4 +1866,102 @@ private fun android.content.Context.pclHostActivity(): android.app.Activity? {
         ctx = ctx.baseContext
     }
     return null
+}
+
+/**
+ * 插件声明的启动画面。
+ *
+ * 由 [PclMainScreen] 盖在整扇窗口最上层：首帧画出来之后淡入，停留一会儿再淡出，
+ * 点一下也能直接跳过。整段逻辑都在启动器进程内，不跨应用、不需要任何权限，
+ * 插件只负责在 `ui.json` 里描述「用什么图、停多久、底色是什么」。
+ */
+@Composable
+private fun PclSplashOverlay(spec: PclSplashSpec) {
+    val scope = rememberCoroutineScope()
+    val alpha = remember { Animatable(0f) }
+    var done by remember { mutableStateOf(false) }
+    // 图片跟着插件目录走：换插件/升级后路径可能变，所以把 assetDir 也算进 key
+    val image = remember(spec.image, PclUiRuntime.assetDir) {
+        spec.image?.let { runCatching { PclAssetLoader.load(PclAssetSpec(src = it)) }.getOrNull() }
+    }
+
+    LaunchedEffect(spec) {
+        alpha.animateTo(1f, tween(durationMillis = 360))
+        delay(spec.durationMs.toLong())
+        alpha.animateTo(0f, tween(durationMillis = spec.fadeMs))
+        done = true
+    }
+
+    if (done) return
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(spec.background)
+            .graphicsLayer { this.alpha = alpha.value }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {
+                scope.launch {
+                    alpha.animateTo(0f, tween(durationMillis = 160))
+                    done = true
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (image != null) {
+            Image(
+                bitmap = image,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+
+        // 没有配图时画一块品牌标记，免得整屏只有纯色
+        if (image == null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(y = (-40).dp)
+                    .size(92.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(Color(0xFF8FE3FF), Color(0xFF7C8BFF)),
+                        ),
+                    ),
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = if (image == null) 60.dp else 0.dp),
+        ) {
+            spec.title?.let {
+                Text(
+                    text = it,
+                    style = PclTextStyle.listTitle(pclPalette).copy(
+                        color = Color.White,
+                        fontSize = androidx.compose.ui.unit.TextUnit(
+                            24f,
+                            androidx.compose.ui.unit.TextUnitType.Sp,
+                        ),
+                    ),
+                )
+            }
+            spec.subtitle?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = it,
+                    style = PclTextStyle.base(pclPalette).copy(
+                        color = Color.White.copy(alpha = 0.62f),
+                    ),
+                )
+            }
+        }
+    }
 }

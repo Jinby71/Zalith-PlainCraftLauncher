@@ -429,11 +429,11 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
                 loadingDetails = false
             }
             when {
-                loadingDetails -> PclCard(title = selectedVersion.title, modifier = Modifier.fillMaxWidth()) {
+                loadingDetails -> PclCard(title = "选择下载源（${selectedVersion.title}）", modifier = Modifier.fillMaxWidth()) {
                     Text("正在加载下载源…", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
                 }
 
-                detailError != null -> PclCard(title = selectedVersion.title, modifier = Modifier.fillMaxWidth()) {
+                detailError != null -> PclCard(title = "选择下载源（${selectedVersion.title}）", modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(detailError.orEmpty(), style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -443,7 +443,7 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
                     }
                 }
 
-                sources.isEmpty() -> PclCard(title = selectedVersion.title, modifier = Modifier.fillMaxWidth()) {
+                sources.isEmpty() -> PclCard(title = "选择下载源（${selectedVersion.title}）", modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("没有可用的下载源。", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
                         PclButton(text = "返回版本列表", onClick = { selected = null })

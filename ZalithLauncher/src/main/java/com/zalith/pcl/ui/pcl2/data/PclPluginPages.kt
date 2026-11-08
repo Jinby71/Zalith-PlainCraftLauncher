@@ -164,6 +164,18 @@ private data class BlockJson(
     @SerializedName("package") val pkg: String? = null,
 )
 
+/**
+ * 插件往某个版块的左栏**追加**一条入口。
+ *
+ * 与 `sections` 的区别：sections 是「整块接管」，这里是「排在系统条目后面加一条」。
+ */
+data class PclPluginEntry(
+    val pluginId: String,
+    val section: String,
+    val label: String,
+    val page: String,
+)
+
 /** 一个版块的接管声明：左栏和内容区各指向一个页面 id（都可以缺）。 */
 data class PclPluginSection(
     val left: String? = null,
@@ -183,9 +195,16 @@ private data class SectionJson(
     @SerializedName("content") val content: String? = null,
 )
 
+private data class EntryJson(
+    @SerializedName("section") val section: String? = null,
+    @SerializedName("label") val label: String? = null,
+    @SerializedName("page") val page: String? = null,
+)
+
 private data class PagesJson(
     @SerializedName("pages") val pages: List<PageJson>? = null,
     @SerializedName("sections") val sections: List<SectionJson>? = null,
+    @SerializedName("entries") val entries: List<EntryJson>? = null,
 )
 
 private val pagesGson = Gson()
@@ -234,6 +253,26 @@ fun parsePclPluginSections(json: String): Map<String, PclPluginSection> {
         if (left == null && content == null) return@mapNotNull null
         name to PclPluginSection(left = left, content = content)
     }.toMap()
+}
+
+/**
+ * 解析 `pages.json` 顶层的 `entries`：
+ *
+ * ```json
+ * "entries": [ { "section": "download", "label": "基岩版下载", "page": "download" } ]
+ * ```
+ *
+ * 启动器把它排在对应版块左栏的系统条目后面。
+ */
+fun parsePclPluginEntries(json: String, pluginId: String): List<PclPluginEntry> {
+    val raw = runCatching { pagesGson.fromJson(json, PagesJson::class.java) }.getOrNull()
+        ?: return emptyList()
+    return raw.entries.orEmpty().mapNotNull { item ->
+        val section = item.section?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        val label = item.label?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        val page = item.page?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        PclPluginEntry(pluginId = pluginId, section = section, label = label, page = page)
+    }
 }
 
 private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase()) {

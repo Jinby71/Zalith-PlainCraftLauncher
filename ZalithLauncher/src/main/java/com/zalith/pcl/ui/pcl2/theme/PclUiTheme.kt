@@ -58,6 +58,7 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
+import com.zalith.pcl.ui.pcl2.data.PclPluginEntry
 import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
 import com.zalith.pcl.ui.pcl2.data.PclPluginSection
 
@@ -693,6 +694,9 @@ object PclUiRuntime {
      * 就渲染这里指的页面 —— 启动器不需要知道那一页里是什么。
      */
     var sectionsByPlugin by mutableStateOf<Map<String, Map<String, PclPluginSection>>>(emptyMap())
+
+    /** 插件要求追加到各版块左栏的入口（见 `PclPluginEntry`）。 */
+    var entries by mutableStateOf<List<PclPluginEntry>>(emptyList())
 
     /** 当前皮肤插件的目录（`ui.json` 里的素材路径相对于它）。 */
     var assetDir by mutableStateOf<java.io.File?>(null)

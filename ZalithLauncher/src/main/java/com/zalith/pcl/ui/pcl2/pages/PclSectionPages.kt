@@ -145,7 +145,9 @@ import com.zalith.pcl.ui.pcl2.data.PclSkinSettings
 import com.zalith.pcl.ui.pcl2.data.PclHiddenKeys
 import com.zalith.pcl.ui.pcl2.theme.PclMotion
 import com.zalith.pcl.ui.pcl2.theme.PclStaggerIn
+import com.zalith.pcl.ui.pcl2.pages.PclPluginPageInline
 import com.zalith.pcl.ui.pcl2.theme.PclTextStyle
+import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
 import com.zalith.pcl.ui.pcl2.theme.pclPalette
 import com.zalith.pcl.terracotta.Terracotta
 import com.zalith.pcl.terracotta.TerracottaState
@@ -248,6 +250,9 @@ private sealed interface PclLeftEntry {
         val buttons: List<PclListItemButton> = emptyList(),
     ) : PclLeftEntry
 
+    /** 插件追加的入口：点开是插件自己的页面。 */
+    data class Plugin(val pluginId: String, val label: String, val page: String) : PclLeftEntry
+
     data class Label(val text: String) : PclLeftEntry
 }
 
@@ -319,6 +324,34 @@ private fun PclLeftPanel(
                         fontSize = PclDimens.leftItemFontSize,
                         buttons = entry.buttons,
                         onClick = { nav.select(entry.index) },
+                    )
+                }
+
+                is PclLeftEntry.Plugin -> PclStaggerIn(animIndex) {
+                    val spec = PclUiRuntime.pages.firstOrNull {
+                        it.pluginId == entry.pluginId && it.id == entry.page
+                    }
+                    PclListItem(
+                        title = entry.label,
+                        logo = PclIcons.dlGame,
+                        logoScale = pclLeftLogoScale(PclIcons.dlGame),
+                        type = PclListItemType.RadioBox,
+                        checked = false,
+                        height = 36.dp,
+                        minPaddingRight = 35.dp,
+                        fontSize = PclDimens.leftItemFontSize,
+                        onClick = {
+                            spec?.let { page ->
+                                // 直接组一个二级页，内容和「插件页面」那套渲染完全一致
+                                nav.push(
+                                    PclSubPage(
+                                        title = page.title,
+                                        leftLabels = page.leftLabels,
+                                        content = { PclPluginPageInline(page) },
+                                    )
+                                )
+                            }
+                        },
                     )
                 }
 
@@ -400,7 +433,9 @@ fun PclDownloadLeft(nav: PclNavController) {
                 5, PclLeftLabels.downloadShader, PclIcons.dlShader, 1.04f,
                 listOf(refreshButton(onClick = { PclDownloadRefresh.trigger() })),
             ),
-        ),
+        ) + PclUiRuntime.entries
+            .filter { it.section == "download" }
+            .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page) },
     )
 }
 

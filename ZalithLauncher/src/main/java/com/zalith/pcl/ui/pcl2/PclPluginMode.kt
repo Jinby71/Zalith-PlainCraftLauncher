@@ -27,6 +27,7 @@ import com.zalith.pcl.setting.launcherMMKV
 import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
 import com.zalith.pcl.ui.pcl2.data.PclPluginSection
 import com.zalith.pcl.ui.pcl2.data.parsePclPluginPages
+import com.zalith.pcl.ui.pcl2.data.parsePclPluginEntries
 import com.zalith.pcl.ui.pcl2.data.parsePclPluginSections
 import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,7 @@ object PclPluginLoader {
         PclUiRuntime.sectionsByPlugin = specs
             .associate { it.pluginId to parsePclPluginSections(it.json) }
             .filterValues { it.isNotEmpty() }
+        PclUiRuntime.entries = specs.flatMap { parsePclPluginEntries(it.json, it.pluginId) }
         // 当前选中的插件如果已经没有页面了（卸载/停用），退回 Java 版
         if (PclPluginMode.activeId.isNotBlank() &&
             specs.none { it.pluginId == PclPluginMode.activeId }

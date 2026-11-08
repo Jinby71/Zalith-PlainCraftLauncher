@@ -87,6 +87,18 @@ sealed interface PclPluginBlock {
 
     /** 竖向留白，[height] 单位 dp（0..200）。 */
     data class Space(val height: Int) : PclPluginBlock
+
+    /**
+     * 某个应用的安装状态：`已安装 v1.21.90` / `未安装`。
+     *
+     * 只认包名，不认它是谁 —— 插件想让启动器显示什么应用的版本，就在这里写哪个包名。
+     * 从系统安装器/商店回到启动器会自动刷新。
+     */
+    data class Status(
+        val packageName: String,
+        /** 前面那截标题；为空就只显示版本。 */
+        val title: String? = null,
+    ) : PclPluginBlock
 }
 
 /** 积木能触发的动作。 */
@@ -107,6 +119,18 @@ sealed interface PclPluginAction {
      * Activity 里。这个动作就是两者之间的门：启动器只负责把插件拉到前台。
      */
     data object Launch : PclPluginAction
+
+    /** 打开一个网址（交给系统的浏览器/应用商店）。 */
+    data class OpenUrl(val url: String) : PclPluginAction
+
+    /** 复制一段文字到剪贴板（提取码这类）。 */
+    data class Copy(val text: String) : PclPluginAction
+
+    /** 让用户挑一个本地 APK，交给系统安装器（不需要存储权限）。 */
+    data object InstallApk : PclPluginAction
+
+    /** 启动另一个已安装的应用。 */
+    data class LaunchApp(val packageName: String) : PclPluginAction
 }
 
 /* ---------------------------------------------------------------- 解析 */
@@ -116,6 +140,8 @@ private data class ActionJson(
     @SerializedName("text") val text: String? = null,
     @SerializedName("id") val id: String? = null,
     @SerializedName("value") val value: String? = null,
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("package") val pkg: String? = null,
 )
 
 private data class BlockJson(
@@ -127,6 +153,7 @@ private data class BlockJson(
     @SerializedName("height") val height: Int? = null,
     @SerializedName("blocks") val blocks: List<BlockJson>? = null,
     @SerializedName("action") val action: ActionJson? = null,
+    @SerializedName("package") val pkg: String? = null,
 )
 
 private data class PageJson(
@@ -185,6 +212,9 @@ private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase
     }
     "divider", "line" -> PclPluginBlock.Divider
     "space", "gap" -> PclPluginBlock.Space((height ?: 12).coerceIn(0, 200))
+    "status", "package_info" -> pkg?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        PclPluginBlock.Status(packageName = it, title = text?.trim()?.takeIf { t -> t.isNotEmpty() })
+    }
     else -> null
 }
 
@@ -192,6 +222,12 @@ private fun ActionJson.toAction(): PclPluginAction? = when (type?.trim()?.lowerc
     "hint", "toast" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Hint(it) }
     "page" -> id?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Page(it) }
     "section" -> value?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Section(it) }
-    "launch", "app", "open" -> PclPluginAction.Launch
+    "launch" -> PclPluginAction.Launch
+    "install" -> PclPluginAction.InstallApk
+    // 带 url 的 open 是「开网页」，不带 url 的 open 才是「开插件自己的界面」
+    "open", "url" -> url?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.OpenUrl(it) }
+        ?: PclPluginAction.Launch
+    "copy" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Copy(it) }
+    "app", "launch_app" -> pkg?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.LaunchApp(it) }
     else -> null
 }

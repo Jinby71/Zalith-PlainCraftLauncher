@@ -16,6 +16,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.io.File
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -85,6 +99,12 @@ private fun PclPluginLeft(labels: List<String>) {
 fun PclPluginPageInline(spec: PclPluginPageSpec) {
     val all = PclUiRuntime.pages
     val nav = LocalPclNav.current
+    val context = LocalContext.current
+    // 「安装本地 APK」是通用动作：挑文件 → 复制进缓存 → 交给系统安装器。
+    // 走系统文件选择器，不需要任何存储权限。
+    val pickApk = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) PclPluginApk.install(context, uri)
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -92,7 +112,16 @@ fun PclPluginPageInline(spec: PclPluginPageSpec) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        spec.blocks.forEach { PclPluginBlockView(it, all, spec.pluginId, nav::push, nav::go) }
+        spec.blocks.forEach {
+            PclPluginBlockView(
+                block = it,
+                all = all,
+                pluginId = spec.pluginId,
+                onInstall = { pickApk.launch(arrayOf("*/*")) },
+                onPush = nav::push,
+                onSection = nav::go,
+            )
+        }
     }
 }
 
@@ -101,6 +130,7 @@ private fun PclPluginBlockView(
     block: PclPluginBlock,
     all: List<PclPluginPageSpec>,
     pluginId: String,
+    onInstall: () -> Unit,
     onPush: (PclSubPage) -> Unit,
     onSection: (PclSection) -> Unit,
 ) {
@@ -125,7 +155,7 @@ private fun PclPluginBlockView(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                block.blocks.forEach { PclPluginBlockView(it, all, pluginId, onPush, onSection) }
+                block.blocks.forEach { PclPluginBlockView(it, all, pluginId, onInstall, onPush, onSection) }
             }
         }
 
@@ -135,14 +165,14 @@ private fun PclPluginBlockView(
         ) {
             block.blocks.forEach { child ->
                 Box(modifier = Modifier.weight(1f, fill = false)) {
-                    PclPluginBlockView(child, all, pluginId, onPush, onSection)
+                    PclPluginBlockView(child, all, pluginId, onInstall, onPush, onSection)
                 }
             }
         }
 
         is PclPluginBlock.Button -> PclButton(
             text = block.text,
-            onClick = { runPclPluginAction(block.action, all, pluginId, onPush, onSection) },
+            onClick = { runPclPluginAction(block.action, all, pluginId, onInstall, onPush, onSection) },
         )
 
         is PclPluginBlock.Switch -> {
@@ -155,7 +185,7 @@ private fun PclPluginBlockView(
                 modifier = Modifier.fillMaxWidth(),
                 onCheckedChange = {
                     checked = it
-                    runPclPluginAction(block.action, all, pluginId, onPush, onSection)
+                    runPclPluginAction(block.action, all, pluginId, onInstall, onPush, onSection)
                 },
             )
         }
@@ -165,6 +195,31 @@ private fun PclPluginBlockView(
         )
 
         is PclPluginBlock.Space -> Spacer(Modifier.height(block.height.dp))
+
+        // 应用安装状态：从安装器/商店回来会自己刷新
+        is PclPluginBlock.Status -> {
+            val ctx = LocalContext.current
+            val owner = LocalLifecycleOwner.current
+            var value by remember(block.packageName) {
+                mutableStateOf(packageStatus(ctx, block.packageName))
+            }
+            DisposableEffect(owner, block.packageName) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        value = packageStatus(ctx, block.packageName)
+                    }
+                }
+                owner.lifecycle.addObserver(observer)
+                onDispose { owner.lifecycle.removeObserver(observer) }
+            }
+            Text(
+                text = listOfNotNull(block.title, value).joinToString(" · "),
+                style = PclTextStyle.base(p).copy(
+                    color = if (value.startsWith("已安装")) p.color3 else p.gray2,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            )
+        }
     }
 }
 
@@ -172,6 +227,7 @@ private fun runPclPluginAction(
     action: PclPluginAction?,
     all: List<PclPluginPageSpec>,
     pluginId: String,
+    onInstall: () -> Unit,
     onPush: (PclSubPage) -> Unit,
     onSection: (PclSection) -> Unit,
 ) {
@@ -200,5 +256,96 @@ private fun runPclPluginAction(
                 PclHintHost.push("没有找到这个插件的界面，重新装一次插件 APK 再试。", PclHintTheme.Red)
             }
         }
+
+        is PclPluginAction.OpenUrl -> openUrl(PclUiRuntime.appContext, action.url)
+        is PclPluginAction.Copy -> copyText(PclUiRuntime.appContext, action.text)
+        is PclPluginAction.InstallApk -> onInstall()
+        is PclPluginAction.LaunchApp -> launchPackage(PclUiRuntime.appContext, action.packageName)
+    }
+}
+
+/* ---------------------------------------------------------------- 通用动作 */
+
+/** 包名 → 「已安装 v1.2.3」/「未安装」。 */
+private fun packageStatus(context: Context, pkg: String): String = runCatching {
+    val info = context.packageManager.getPackageInfo(pkg, 0)
+    "已安装 v" + (info.versionName?.takeIf { it.isNotBlank() } ?: "未知版本")
+}.getOrDefault("未安装")
+
+private fun openUrl(context: Context?, url: String) {
+    if (context == null) return
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.onFailure { PclHintHost.push("没有可以打开这个链接的应用。", PclHintTheme.Red) }
+}
+
+private fun copyText(context: Context?, text: String) {
+    if (context == null) return
+    runCatching {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("插件", text))
+    }.onSuccess { PclHintHost.push("已复制：$text", PclHintTheme.Green) }
+        .onFailure { PclHintHost.push("复制失败。", PclHintTheme.Red) }
+}
+
+private fun launchPackage(context: Context?, pkg: String) {
+    if (context == null) return
+    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+    if (intent == null) {
+        PclHintHost.push("没有安装 $pkg。", PclHintTheme.Red)
+        return
+    }
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
+        .onFailure { PclHintHost.push("启动失败。", PclHintTheme.Red) }
+}
+
+/**
+ * 把用户选的 APK 交给系统安装器。
+ *
+ * 先复制进缓存：`content://` 的读权限是临时的，安装器在另一个进程里读不到。
+ */
+private object PclPluginApk {
+    fun install(context: Context, uri: Uri) {
+        val file = runCatching {
+            val dir = File(context.cacheDir, "plugin-install").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() }
+            val out = File(dir, "plugin.apk")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                out.outputStream().use { output -> input.copyTo(output) }
+            }
+            out
+        }.getOrNull()
+
+        if (file == null || file.length() == 0L) {
+            PclHintHost.push("读不到这个安装包，换一个再试。", PclHintTheme.Red)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            PclHintHost.push("需要先允许「安装未知应用」，授权后重新点一次。", PclHintTheme.Yellow)
+            runCatching {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}"),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+            return
+        }
+        runCatching {
+            val apk = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(apk, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }.onFailure { PclHintHost.push("没有可用的安装器。", PclHintTheme.Red) }
     }
 }

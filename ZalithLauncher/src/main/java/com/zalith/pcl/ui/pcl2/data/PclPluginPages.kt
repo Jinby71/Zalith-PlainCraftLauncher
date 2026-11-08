@@ -103,6 +103,16 @@ sealed interface PclPluginBlock {
         /** 前面那截标题；为空就只显示版本。 */
         val title: String? = null,
     ) : PclPluginBlock
+
+    /** A plugin-backed version collection rendered with native launcher controls. */
+    data class VersionCollection(
+        val title: String,
+        val listMethod: String,
+        val detailMethod: String,
+        val groups: List<String>,
+        val groupIcons: Map<String, String>,
+        val options: List<Pair<String, String>>,
+    ) : PclPluginBlock
 }
 
 /** 积木能触发的动作。 */
@@ -151,6 +161,11 @@ private data class ActionJson(
     @SerializedName("package") val pkg: String? = null,
 )
 
+private data class OptionJson(
+    @SerializedName("value") val value: String? = null,
+    @SerializedName("label") val label: String? = null,
+)
+
 private data class BlockJson(
     @SerializedName("type") val type: String? = null,
     @SerializedName("text") val text: String? = null,
@@ -162,6 +177,11 @@ private data class BlockJson(
     @SerializedName("blocks") val blocks: List<BlockJson>? = null,
     @SerializedName("action") val action: ActionJson? = null,
     @SerializedName("package") val pkg: String? = null,
+    @SerializedName("method") val method: String? = null,
+    @SerializedName("detail_method") val detailMethod: String? = null,
+    @SerializedName("groups") val groups: List<String>? = null,
+    @SerializedName("group_icons") val groupIcons: Map<String, String>? = null,
+    @SerializedName("options") val options: List<OptionJson>? = null,
 )
 
 /**
@@ -265,7 +285,7 @@ fun parsePclPluginSections(json: String): Map<String, PclPluginSection> {
  * 解析 `pages.json` 顶层的 `entries`：
  *
  * ```json
- * "entries": [ { "section": "download", "label": "基岩版下载", "page": "download" } ]
+ * "entries": [ { "section": "download", "label": "插件入口", "page": "download" } ]
  * ```
  *
  * 启动器把它排在对应版块左栏的系统条目后面。
@@ -307,6 +327,26 @@ private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase
     "space", "gap" -> PclPluginBlock.Space((height ?: 12).coerceIn(0, 200))
     "status", "package_info" -> pkg?.trim()?.takeIf { it.isNotEmpty() }?.let {
         PclPluginBlock.Status(packageName = it, title = text?.trim()?.takeIf { t -> t.isNotEmpty() })
+    }
+    "version_collection" -> {
+        val method = method?.trim()?.takeIf { it.isNotEmpty() }
+        val detail = detailMethod?.trim()?.takeIf { it.isNotEmpty() }
+        if (method == null || detail == null) null else PclPluginBlock.VersionCollection(
+            title = title?.trim()?.takeIf { it.isNotEmpty() } ?: "版本列表",
+            listMethod = method,
+            detailMethod = detail,
+            groups = groups.orEmpty().map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
+            groupIcons = groupIcons.orEmpty().mapNotNull { (name, resource) ->
+                val key = name.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val value = resource.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                key to value
+            }.toMap(),
+            options = options.orEmpty().mapNotNull { option ->
+                val value = option.value?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val label = option.label?.trim()?.takeIf { it.isNotEmpty() } ?: value
+                value to label
+            },
+        )
     }
     else -> null
 }

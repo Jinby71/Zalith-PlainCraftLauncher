@@ -11,6 +11,7 @@
 package com.zalith.pcl.ui.pcl2.pages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +25,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -34,15 +36,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,13 +60,23 @@ import com.zalith.pcl.ui.pcl2.components.PclCard
 import com.zalith.pcl.ui.pcl2.components.PclColorState
 import com.zalith.pcl.ui.pcl2.components.PclHintTheme
 import com.zalith.pcl.ui.pcl2.components.PclSwitchItem
+import com.zalith.pcl.ui.pcl2.components.PclListItem
+import com.zalith.pcl.ui.pcl2.components.PclListItemType
+import com.zalith.pcl.ui.pcl2.components.PclSearchBox
+import com.zalith.pcl.ui.pcl2.components.rememberPclRowChunks
 import com.zalith.pcl.ui.pcl2.data.PclPluginAction
 import com.zalith.pcl.ui.pcl2.data.PclPluginBlock
 import com.zalith.pcl.game.plugin.ZlPluginManager
 import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
 import com.zalith.pcl.ui.pcl2.theme.PclTextStyle
+import com.zalith.pcl.ui.pcl2.theme.PclDimens
 import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
 import com.zalith.pcl.ui.pcl2.theme.pclPalette
+import com.zalith.pcl.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 把一个插件页面包装成启动器的二级页面。
@@ -223,8 +238,283 @@ private fun PclPluginBlockView(
                 ),
             )
         }
+
+        is PclPluginBlock.VersionCollection -> PclPluginVersionCollection(
+            block = block,
+            pluginId = pluginId,
+        )
     }
 }
+
+private data class PluginVersionItem(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val group: String,
+    val latest: Boolean,
+)
+
+private data class PluginDownloadItem(val title: String, val url: String, val password: String)
+
+@Composable
+private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, pluginId: String) {
+    val context = LocalContext.current
+    val plugin = remember(pluginId) {
+        runCatching { ZlPluginManager.list(context).firstOrNull { it.id == pluginId } }.getOrNull()
+    }
+    var items by remember(block, plugin?.pkg) { mutableStateOf<List<PluginVersionItem>>(emptyList()) }
+    var sources by remember { mutableStateOf<List<PluginDownloadItem>>(emptyList()) }
+    var selected by remember { mutableStateOf<PluginVersionItem?>(null) }
+    var selectedOption by remember(block) { mutableStateOf(block.options.firstOrNull()?.first.orEmpty()) }
+    var query by remember { mutableStateOf("") }
+    var loading by remember(block, plugin?.pkg) { mutableStateOf(true) }
+    var error by remember(block, plugin?.pkg) { mutableStateOf<String?>(null) }
+    var detailError by remember { mutableStateOf<String?>(null) }
+    var loadingDetails by remember { mutableStateOf(false) }
+    var reloadKey by remember(block, plugin?.pkg) { mutableStateOf(0) }
+    val groupLogos = remember(block.groupIcons) {
+        val resources = mapOf(
+            "pcl_block_grass" to R.drawable.pcl_block_grass,
+            "pcl_block_command_block" to R.drawable.pcl_block_command_block,
+            "pcl_block_cobblestone" to R.drawable.pcl_block_cobblestone,
+            "pcl_block_gold_block" to R.drawable.pcl_block_gold_block,
+        )
+        block.groupIcons.mapNotNull { (group, resourceName) ->
+            resources[resourceName]?.let { group to it }
+        }.toMap()
+    }
+
+    suspend fun request(method: String, argument: String = ""): String = withContext(Dispatchers.IO) {
+        val pkg = plugin?.pkg?.ifBlank { plugin.id } ?: throw IllegalStateException("插件数据提供方不可用。")
+        val uri = Uri.parse("content://$pkg.pclplugin")
+        context.contentResolver.call(uri, method, argument, null)
+            ?.let { result ->
+                result.getString("error")?.let { throw IllegalStateException(it) }
+                result.getString("json") ?: throw IllegalStateException("插件没有返回数据。")
+            } ?: throw IllegalStateException("插件没有返回数据。")
+    }
+
+    LaunchedEffect(block, plugin?.pkg, reloadKey) {
+        if (plugin == null) {
+            error = "数据提供方不可用。"
+            loading = false
+            return@LaunchedEffect
+        }
+        loading = true
+        error = null
+        runCatching {
+            JSONObject(request(block.listMethod)).optJSONArray("items").orEmptyJsonArray().mapNotNull { value ->
+                val item = value as? JSONObject ?: return@mapNotNull null
+                val id = item.optString("id").trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                PluginVersionItem(
+                    id = id,
+                    title = item.optString("title", id).ifBlank { id },
+                    subtitle = item.optString("subtitle"),
+                    group = item.optString("group"),
+                    latest = item.optBoolean("latest"),
+                )
+            }
+        }.onSuccess { items = it }
+            .onFailure { error = it.message ?: "无法加载版本列表。" }
+        loading = false
+    }
+
+    val visible = remember(items, query) {
+        if (query.isBlank()) items else items.filter {
+            it.title.contains(query.trim(), true) || it.subtitle.contains(query.trim(), true)
+        }
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        if (selected == null && !loading && error == null) {
+            PclSearchBox(
+                value = query,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp),
+                hint = "搜索版本号",
+                onValueChange = { query = it },
+            )
+        }
+        if (block.options.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                block.options.forEach { (value, label) ->
+                    PclButton(
+                        text = label,
+                        colorState = if (selectedOption == value) PclColorState.Highlight else PclColorState.Normal,
+                        onClick = { selectedOption = value; sources = emptyList(); detailError = null },
+                    )
+                }
+            }
+        }
+        val selectedVersion = selected
+        if (selectedVersion != null) {
+            LaunchedEffect(selectedVersion.id, selectedOption) {
+                loadingDetails = true
+                detailError = null
+                runCatching {
+                    val result = JSONObject(request(block.detailMethod, "${selectedVersion.id}\n$selectedOption"))
+                    result.optJSONArray("items").orEmptyJsonArray().mapNotNull { value ->
+                        val item = value as? JSONObject ?: return@mapNotNull null
+                        val url = item.optString("url").trim()
+                        if (!url.startsWith("https://") && !url.startsWith("http://")) return@mapNotNull null
+                        PluginDownloadItem(
+                            title = item.optString("title", "下载源").ifBlank { "下载源" },
+                            url = url,
+                            password = item.optString("password"),
+                        )
+                    }
+                }.onSuccess { sources = it }
+                    .onFailure { detailError = it.message ?: "无法加载下载源。" }
+                loadingDetails = false
+            }
+            PclCard(title = selectedVersion.title, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (selectedVersion.subtitle.isNotBlank()) {
+                        Text(selectedVersion.subtitle, style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+                    }
+                    if (loadingDetails) {
+                        Text("正在加载下载源…", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+                    }
+                    sources.forEach { source ->
+                        PclButton(text = source.title, modifier = Modifier.fillMaxWidth(), onClick = {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source.url)))
+                            }.onFailure { PclHintHost.push("没有可打开此链接的应用。", PclHintTheme.Red) }
+                        })
+                        if (source.password.isNotBlank()) {
+                            PclButton(text = "复制提取码：${source.password}", modifier = Modifier.fillMaxWidth(), onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("提取码", source.password))
+                                PclHintHost.push("已复制。", PclHintTheme.Green)
+                            })
+                        }
+                    }
+                    if (sources.isEmpty() && !loadingDetails && detailError != null) {
+                        Text(detailError.orEmpty(), style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+                    }
+                    PclButton(text = "返回版本列表", onClick = {
+                        selected = null
+                        sources = emptyList()
+                        detailError = null
+                    })
+                }
+            }
+        } else if (loading) {
+            PclCard(title = block.title, modifier = Modifier.fillMaxWidth()) {
+                Text("正在加载…", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+            }
+        } else if (error != null) {
+            PclCard(title = block.title, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(error.orEmpty(), style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+                    PclButton(text = "重试", onClick = {
+                        loading = true
+                        error = null
+                        reloadKey++
+                    })
+                }
+            }
+        } else if (query.isNotBlank()) {
+            PclPluginVersionGroup(
+                title = "搜索结果 (${visible.size})",
+                values = visible,
+                logoRes = block.groups.firstNotNullOfOrNull { groupLogos[it] },
+            ) { item ->
+                selected = item
+                sources = emptyList()
+                detailError = null
+            }
+        } else {
+            val latest = visible.filter { it.latest }
+            if (visible.isEmpty()) {
+                PclCard(title = block.title, modifier = Modifier.fillMaxWidth()) {
+                    Text("没有可显示的版本。", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+                }
+            }
+            if (latest.isNotEmpty()) {
+                PclPluginVersionGroup(
+                    title = "最新版本",
+                    values = latest,
+                    logoRes = block.groups.firstNotNullOfOrNull { groupLogos[it] },
+                ) { item ->
+                    selected = item
+                    sources = emptyList()
+                    detailError = null
+                }
+            }
+            block.groups.forEach { group ->
+                val values = visible.filter { !it.latest && it.group == group }
+                if (values.isNotEmpty()) {
+                    PclPluginVersionGroup(title = "$group (${values.size})", values = values, collapsed = true, logoRes = groupLogos[group]) { item ->
+                        selected = item
+                        sources = emptyList()
+                        detailError = null
+                    }
+                }
+            }
+            val ungrouped = visible.filter { !it.latest && it.group !in block.groups }
+            if (ungrouped.isNotEmpty()) {
+                PclPluginVersionGroup(title = "其他 (${ungrouped.size})", values = ungrouped, collapsed = true) { item ->
+                    selected = item
+                    sources = emptyList()
+                    detailError = null
+                }
+            }
+        }
+
+    }
+}
+
+@Composable
+private fun PclPluginVersionGroup(
+    title: String,
+    values: List<PluginVersionItem>,
+    collapsed: Boolean = false,
+    logoRes: Int? = null,
+    onPick: (PluginVersionItem) -> Unit,
+) {
+    val collapsedState = remember(title) { mutableStateOf(collapsed) }
+    val chunks = rememberPclRowChunks(total = values.size, collapsed = collapsedState)
+    PclCard(
+        title = title,
+        modifier = Modifier.fillMaxWidth().padding(top = if (collapsed) 0.dp else 15.dp, bottom = 15.dp),
+        collapsible = collapsed,
+        initiallyCollapsed = collapsed,
+        swapLogoRight = collapsed,
+        collapsedState = if (collapsed) collapsedState else null,
+        onToggle = if (collapsed) chunks.onToggle else null,
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = PclDimens.cardContentTop,
+            end = 18.dp,
+            bottom = 18.dp,
+        ),
+    ) {
+        for (index in 0 until chunks.shown) {
+            val item = values[index]
+            PclListItem(
+                title = item.title,
+                info = item.subtitle.takeIf { it.isNotBlank() },
+                logoContent = logoRes?.let { res ->
+                    {
+                        Image(
+                            painter = painterResource(res),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillBounds,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                },
+                type = PclListItemType.Clickable,
+                height = 42.dp,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onPick(item) },
+            )
+        }
+    }
+}
+
+private fun JSONArray?.orEmptyJsonArray(): List<Any?> =
+    if (this == null) emptyList() else (0 until length()).map { opt(it) }
 
 private fun runPclPluginAction(
     action: PclPluginAction?,

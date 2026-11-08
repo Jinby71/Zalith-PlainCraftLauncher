@@ -22,10 +22,15 @@ package com.zalith.pcl.ui.pcl2
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.zalith.pcl.game.plugin.ZlPluginManager
 import com.zalith.pcl.setting.launcherMMKV
 import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
 import com.zalith.pcl.ui.pcl2.data.PclPluginSection
+import com.zalith.pcl.ui.pcl2.data.parsePclPluginPages
+import com.zalith.pcl.ui.pcl2.data.parsePclPluginSections
 import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 当前生效的插件模式。
@@ -66,4 +71,28 @@ object PclPluginMode {
 
     /** 首页那页（`sections` 里 `home` 的 content）。 */
     fun homePage(): PclPluginPageSpec? = page(section(PclSection.Home)?.content)
+}
+
+/**
+ * 插件页面 / 版块声明的加载器。
+ *
+ * 以前只在 `PclShell` 启动时读一次 —— 装完或升级插件之后不重启启动器就一直是旧的，
+ * 表现是「导入插件了但页面没变」。现在安装完、回到前台都会重读一次。
+ */
+object PclPluginLoader {
+
+    /** 重新读一遍所有启用插件的 pages.json。必须在 IO 线程调用。 */
+    suspend fun reload(context: android.content.Context) = withContext(Dispatchers.IO) {
+        val specs = runCatching { ZlPluginManager.activePages(context) }.getOrDefault(emptyList())
+        PclUiRuntime.pages = specs.flatMap { parsePclPluginPages(it.json, it.pluginId) }
+        PclUiRuntime.sectionsByPlugin = specs
+            .associate { it.pluginId to parsePclPluginSections(it.json) }
+            .filterValues { it.isNotEmpty() }
+        // 当前选中的插件如果已经没有页面了（卸载/停用），退回 Java 版
+        if (PclPluginMode.activeId.isNotBlank() &&
+            specs.none { it.pluginId == PclPluginMode.activeId }
+        ) {
+            PclPluginMode.set("")
+        }
+    }
 }

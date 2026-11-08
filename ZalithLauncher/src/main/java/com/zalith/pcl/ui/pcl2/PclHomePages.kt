@@ -455,6 +455,8 @@ private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime)
         val found = withContext(Dispatchers.IO) {
             runCatching { ZlPluginManager.recognizeInstalled(context) }.getOrDefault(emptyList())
         }.filter { it.enabled && it.entry }
+        // 刚装上/刚升级的插件，页面与版块声明要立刻重读 —— 否则要重启启动器才生效
+        PclPluginLoader.reload(context)
         entryPlugins = found
         // 选中的插件被卸载/停用就退回 Java 版
         if (PclPluginMode.activeId.isNotBlank() && found.none { it.id == PclPluginMode.activeId }) {
@@ -504,7 +506,12 @@ private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime)
                     PclText(text = selected.label.ifBlank { selected.name }, fontSize = 20, bold = true)
                     Spacer(Modifier.height(10.dp))
                     PclText(
-                        text = selected.description.ifBlank { "内容由插件提供。" },
+                        // 没加载到页面时把原因说出来，别只给一句介绍让人猜
+                        text = if (PclUiRuntime.pages.none { it.pluginId == selected.id }) {
+                            "没有读到这个插件的页面 —— 多半装的是不带 pages.json 的旧版本，换新的插件包再试。"
+                        } else {
+                            selected.description.ifBlank { "内容由插件提供。" }
+                        },
                         fontSize = 12,
                         color = p.gray2,
                     )

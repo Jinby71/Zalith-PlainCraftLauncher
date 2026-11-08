@@ -408,18 +408,8 @@ fun PclMainScreen(
         PclAssetLoader.clear()
         // 插件声明的页面：布局槽位（ui.json 的 layout）要按 id 找它们，
         // 而渲染版块的地方拿不到插件目录，所以在这里读一次、存进全局。
-        PclUiRuntime.pages = withContext(Dispatchers.IO) {
-            runCatching {
-                ZlPluginManager.activePages(context).flatMap { parsePclPluginPages(it.json, it.pluginId) }
-            }.getOrDefault(emptyList())
-        }
-        // 版块接管声明：插件说「下载/版本设置这几页归我」，启动器就按 id 去渲染它的页面。
-        PclUiRuntime.sectionsByPlugin = withContext(Dispatchers.IO) {
-            runCatching {
-                ZlPluginManager.activePages(context).associate { it.pluginId to parsePclPluginSections(it.json) }
-                    .filterValues { it.isNotEmpty() }
-            }.getOrDefault(emptyMap())
-        }
+        // 插件页面 + 版块接管声明一起读（装完/升级插件后回前台会重读，见 PclPluginLoader）
+        PclPluginLoader.reload(context)
         PclPluginMode.ensureLoaded()
         PclLoginSettings.load(context)
         // 背景图片 / 背景音乐 / 标题图片 / 自定义主页（PageSetupUI 的另外几张卡）

@@ -155,6 +155,7 @@ import com.zalith.pcl.ui.pcl2.theme.PclGlassQuality
 import com.zalith.pcl.ui.pcl2.theme.PclSlotOverride
 import com.zalith.pcl.ui.pcl2.theme.PclUiTheme
 import com.zalith.pcl.ui.pcl2.data.parsePclPluginPages
+import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
 import com.zalith.pcl.ui.pcl2.data.parsePclPluginSections
 import com.zalith.pcl.ui.pcl2.pages.PclPluginPageInline
 import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
@@ -232,6 +233,9 @@ class PclNavController(initial: PclSection = PclSection.Home) {
         private set
     var subPage by mutableStateOf<PclSubPage?>(null)
         private set
+    /** 插件页在当前版块主栏中的选择；不进入二级页。 */
+    var pluginContent by mutableStateOf<Pair<String, String>?>(null)
+        private set
 
     /**
      * 一级版块令牌：只在「换版块 / 进二级页 / 返回」时递增。
@@ -252,14 +256,23 @@ class PclNavController(initial: PclSection = PclSection.Home) {
         section = target
         leftIndex = index
         subPage = null
+        pluginContent = null
         sectionToken++
         pageToken++
     }
 
     /** 选中左侧列表的第 [index] 项。 */
     fun select(index: Int) {
-        if (leftIndex == index) return
+        if (leftIndex == index && pluginContent == null) return
         leftIndex = index
+        pluginContent = null
+        pageToken++
+    }
+
+    fun selectPluginContent(page: PclPluginPageSpec) {
+        val target = page.pluginId to page.id
+        if (pluginContent == target) return
+        pluginContent = target
         pageToken++
     }
 
@@ -364,13 +377,14 @@ fun PclMainScreen(
     val canGoBack by remember {
         derivedStateOf {
             runtime.webPage != null || nav.subPage != null ||
-                nav.leftIndex != 0 || nav.section != PclSection.Home
+                nav.pluginContent != null || nav.leftIndex != 0 || nav.section != PclSection.Home
         }
     }
     BackHandler(enabled = canGoBack) {
         when {
             runtime.webPage != null -> runtime.closeWebPage()
             nav.subPage != null -> nav.back()
+            nav.pluginContent != null -> nav.select(0)
             nav.leftIndex != 0 -> nav.select(0)
             else -> nav.go(PclSection.Home)
         }
@@ -1293,11 +1307,18 @@ private fun PclBody(nav: PclNavController) {
 
                     // 右侧内容
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        val pluginContent = nav.pluginContent?.let { (pluginId, pageId) ->
+                            PclUiRuntime.pages.firstOrNull { it.pluginId == pluginId && it.id == pageId }
+                        }
                         val modeContent = PclPluginMode.page(
                             PclPluginMode.section(nav.section)?.content
                         )
                         if (sub != null) {
                             sub.content()
+                        } else if (pluginContent != null) {
+                            key(pluginContent.pluginId, pluginContent.id) {
+                                PclPluginPageInline(pluginContent)
+                            }
                         } else if (modeContent != null) {
                             // 当前插件接管了这一版块的内容区（整页切换）
                             PclPluginPageInline(modeContent)

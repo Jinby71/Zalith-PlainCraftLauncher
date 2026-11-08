@@ -251,7 +251,7 @@ private sealed interface PclLeftEntry {
     ) : PclLeftEntry
 
     /** 插件追加的入口：点开是插件自己的页面。 */
-    data class Plugin(val pluginId: String, val label: String, val page: String) : PclLeftEntry
+    data class Plugin(val pluginId: String, val label: String, val page: String, val display: String) : PclLeftEntry
 
     data class Label(val text: String) : PclLeftEntry
 }
@@ -315,7 +315,7 @@ private fun PclLeftPanel(
                         logo = entry.logo,
                         logoScale = pclLeftLogoScale(entry.logo),
                         type = PclListItemType.RadioBox,
-                        checked = nav.leftIndex == entry.index,
+                        checked = nav.pluginContent == null && nav.leftIndex == entry.index,
                         height = 36.dp,
                         // 四个左栏 XAML 的每个条目都写了 MinPaddingRight="35"
                         minPaddingRight = 35.dp,
@@ -336,14 +336,15 @@ private fun PclLeftPanel(
                         logo = PclIcons.dlGame,
                         logoScale = pclLeftLogoScale(PclIcons.dlGame),
                         type = PclListItemType.RadioBox,
-                        checked = false,
+                        checked = nav.pluginContent == (entry.pluginId to entry.page),
                         height = 36.dp,
                         minPaddingRight = 35.dp,
                         fontSize = PclDimens.leftItemFontSize,
                         onClick = {
                             spec?.let { page ->
-                                // 直接组一个二级页，内容和「插件页面」那套渲染完全一致
-                                nav.push(
+                                if (entry.display == "content") {
+                                    nav.selectPluginContent(page)
+                                } else nav.push(
                                     PclSubPage(
                                         title = page.title,
                                         leftLabels = page.leftLabels,
@@ -437,9 +438,9 @@ fun PclDownloadLeft(nav: PclNavController) {
             // 插件入口：position=top 的紧跟「原版游戏」，其余追加到末尾
             val mine = PclUiRuntime.entries.filter { it.section == "download" }
             val top = mine.filter { it.position == "top" }
-                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page) }
+                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page, it.display) }
             val end = mine.filter { it.position != "top" }
-                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page) }
+                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page, it.display) }
             // base = [原版游戏, 「社区资源」分组, Mod, …]，插在第一个条目之后
             base.take(1) + top + base.drop(1) + end
         },

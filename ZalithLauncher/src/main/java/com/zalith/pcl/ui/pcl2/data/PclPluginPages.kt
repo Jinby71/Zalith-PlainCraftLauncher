@@ -49,6 +49,8 @@ data class PclPluginPageSpec(
     /** 左栏条目（可选）；为空时这一页没有左栏。 */
     val leftLabels: List<String> = emptyList(),
     val blocks: List<PclPluginBlock> = emptyList(),
+    val layout: String = "scroll",
+    val footerBlocks: List<PclPluginBlock> = emptyList(),
     /**
      * 这一页是哪个插件给的（[ZlPlugin] 的 id）。
      *
@@ -77,7 +79,10 @@ sealed interface PclPluginBlock {
         val text: String,
         val action: PclPluginAction?,
         val primary: Boolean = false,
+        val height: Int? = null,
     ) : PclPluginBlock
+
+    data class Icon(val resource: String, val size: Int = 48) : PclPluginBlock
 
     /** 开关。状态由插件页面自己保存（运行期），不落盘。 */
     data class Switch(
@@ -175,8 +180,12 @@ private data class BlockJson(
     @SerializedName("primary") val primary: Boolean? = null,
     @SerializedName("height") val height: Int? = null,
     @SerializedName("blocks") val blocks: List<BlockJson>? = null,
+    @SerializedName("footer") val footer: List<BlockJson>? = null,
+    @SerializedName("layout") val layout: String? = null,
     @SerializedName("action") val action: ActionJson? = null,
     @SerializedName("package") val pkg: String? = null,
+    @SerializedName("resource") val resource: String? = null,
+    @SerializedName("size") val size: Int? = null,
     @SerializedName("method") val method: String? = null,
     @SerializedName("detail_method") val detailMethod: String? = null,
     @SerializedName("groups") val groups: List<String>? = null,
@@ -199,6 +208,7 @@ data class PclPluginEntry(
      * `end` = 追加到最后（默认）。
      */
     val position: String = "end",
+    val display: String = "page",
 )
 
 /** 一个版块的接管声明：左栏和内容区各指向一个页面 id（都可以缺）。 */
@@ -212,6 +222,8 @@ private data class PageJson(
     @SerializedName("title") val title: String? = null,
     @SerializedName("left") val left: List<String>? = null,
     @SerializedName("blocks") val blocks: List<BlockJson>? = null,
+    @SerializedName("layout") val layout: String? = null,
+    @SerializedName("footer") val footer: List<BlockJson>? = null,
 )
 
 private data class SectionJson(
@@ -225,6 +237,7 @@ private data class EntryJson(
     @SerializedName("label") val label: String? = null,
     @SerializedName("page") val page: String? = null,
     @SerializedName("position") val position: String? = null,
+    @SerializedName("display") val display: String? = null,
 )
 
 private data class PagesJson(
@@ -243,6 +256,11 @@ fun parsePclPluginPages(json: String, pluginId: String = ""): List<PclPluginPage
     val raw = runCatching { pagesGson.fromJson(json, PagesJson::class.java) }.getOrNull()
     val pages = raw?.pages ?: return emptyList()
     var budget = MAX_BLOCKS
+    fun parseBlocks(source: List<BlockJson>?): List<PclPluginBlock> = source.orEmpty().mapNotNull { block ->
+        if (budget <= 0) return@mapNotNull null
+        budget--
+        block.toBlock()
+    }
     return pages.mapIndexedNotNull { index, page ->
         val title = page.title?.trim().takeUnless { it.isNullOrBlank() } ?: return@mapIndexedNotNull null
         val id = page.id?.trim().takeUnless { it.isNullOrBlank() } ?: "page-$index"
@@ -251,11 +269,9 @@ fun parsePclPluginPages(json: String, pluginId: String = ""): List<PclPluginPage
             title = title,
             pluginId = pluginId,
             leftLabels = page.left?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
-            blocks = page.blocks.orEmpty().mapNotNull { block ->
-                if (budget <= 0) return@mapNotNull null
-                budget--
-                block.toBlock()
-            },
+            blocks = parseBlocks(page.blocks),
+            layout = page.layout?.trim()?.lowercase()?.takeIf { it == "panel" } ?: "scroll",
+            footerBlocks = parseBlocks(page.footer),
         )
     }
 }
@@ -303,6 +319,7 @@ fun parsePclPluginEntries(json: String, pluginId: String): List<PclPluginEntry> 
             label = label,
             page = page,
             position = item.position?.trim()?.lowercase()?.takeIf { it == "top" } ?: "end",
+            display = item.display?.trim()?.lowercase()?.takeIf { it == "content" } ?: "page",
         )
     }
 }
@@ -318,7 +335,7 @@ private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase
     )
     "row" -> PclPluginBlock.Row(blocks.orEmpty().mapNotNull { it.toBlock() })
     "button" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let {
-        PclPluginBlock.Button(it, action?.toAction(), primary == true)
+        PclPluginBlock.Button(it, action?.toAction(), primary == true, height?.coerceIn(32, 72))
     }
     "switch", "toggle" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let {
         PclPluginBlock.Switch(it, checked == true, action?.toAction())
@@ -327,6 +344,9 @@ private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase
     "space", "gap" -> PclPluginBlock.Space((height ?: 12).coerceIn(0, 200))
     "status", "package_info" -> pkg?.trim()?.takeIf { it.isNotEmpty() }?.let {
         PclPluginBlock.Status(packageName = it, title = text?.trim()?.takeIf { t -> t.isNotEmpty() })
+    }
+    "icon" -> resource?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        PclPluginBlock.Icon(it, (size ?: 48).coerceIn(16, 128))
     }
     "version_collection" -> {
         val method = method?.trim()?.takeIf { it.isNotEmpty() }

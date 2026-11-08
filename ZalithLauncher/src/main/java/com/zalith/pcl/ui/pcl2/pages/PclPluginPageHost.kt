@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -121,21 +122,68 @@ fun PclPluginPageInline(spec: PclPluginPageSpec) {
     val pickApk = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) PclPluginApk.install(context, uri)
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        spec.blocks.forEach {
+    val onInstall = { pickApk.launch(arrayOf("*/*")) }
+    if (spec.layout == "panel" && spec.footerBlocks.isNotEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            PclPluginBlocksView(
+                blocks = spec.blocks,
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                all = all,
+                pluginId = spec.pluginId,
+                onInstall = onInstall,
+                onPush = nav::push,
+                onSection = nav::go,
+            )
+            PclPluginBlocksView(
+                blocks = spec.footerBlocks,
+                modifier = Modifier.fillMaxWidth(),
+                all = all,
+                pluginId = spec.pluginId,
+                onInstall = onInstall,
+                onPush = nav::push,
+                onSection = nav::go,
+            )
+        }
+    } else {
+        PclPluginBlocksView(
+            blocks = spec.blocks + spec.footerBlocks,
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            all = all,
+            pluginId = spec.pluginId,
+            onInstall = onInstall,
+            onPush = nav::push,
+            onSection = nav::go,
+        )
+    }
+}
+
+@Composable
+private fun PclPluginBlocksView(
+    blocks: List<PclPluginBlock>,
+    modifier: Modifier,
+    all: List<PclPluginPageSpec>,
+    pluginId: String,
+    onInstall: () -> Unit,
+    onPush: (PclSubPage) -> Unit,
+    onSection: (PclSection) -> Unit,
+    horizontalAlignment: androidx.compose.ui.Alignment.Horizontal = androidx.compose.ui.Alignment.Start,
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(10.dp),
+) {
+    Column(modifier, verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment) {
+        blocks.forEach {
             PclPluginBlockView(
                 block = it,
                 all = all,
-                pluginId = spec.pluginId,
-                onInstall = { pickApk.launch(arrayOf("*/*")) },
-                onPush = nav::push,
-                onSection = nav::go,
+                pluginId = pluginId,
+                onInstall = onInstall,
+                onPush = onPush,
+                onSection = onSection,
             )
         }
     }
@@ -189,6 +237,7 @@ private fun PclPluginBlockView(
         is PclPluginBlock.Button -> PclButton(
             text = block.text,
             colorState = if (block.primary) PclColorState.Highlight else PclColorState.Normal,
+            height = block.height?.dp ?: PclDimens.buttonHeight,
             modifier = Modifier.fillMaxWidth(),
             onClick = { runPclPluginAction(block.action, all, pluginId, onInstall, onPush, onSection) },
         )
@@ -239,6 +288,17 @@ private fun PclPluginBlockView(
             )
         }
 
+        is PclPluginBlock.Icon -> genericPluginIconResource(block.resource)?.let { resource ->
+            Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Image(
+                    painter = painterResource(resource),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(block.size.dp),
+                )
+            }
+        }
+
         is PclPluginBlock.VersionCollection -> PclPluginVersionCollection(
             block = block,
             pluginId = pluginId,
@@ -273,14 +333,8 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
     var loadingDetails by remember { mutableStateOf(false) }
     var reloadKey by remember(block, plugin?.pkg) { mutableStateOf(0) }
     val groupLogos = remember(block.groupIcons) {
-        val resources = mapOf(
-            "pcl_block_grass" to R.drawable.pcl_block_grass,
-            "pcl_block_command_block" to R.drawable.pcl_block_command_block,
-            "pcl_block_cobblestone" to R.drawable.pcl_block_cobblestone,
-            "pcl_block_gold_block" to R.drawable.pcl_block_gold_block,
-        )
         block.groupIcons.mapNotNull { (group, resourceName) ->
-            resources[resourceName]?.let { group to it }
+            genericPluginIconResource(resourceName)?.let { group to it }
         }.toMap()
     }
 
@@ -515,6 +569,14 @@ private fun PclPluginVersionGroup(
 
 private fun JSONArray?.orEmptyJsonArray(): List<Any?> =
     if (this == null) emptyList() else (0 until length()).map { opt(it) }
+
+private fun genericPluginIconResource(name: String): Int? = when (name) {
+    "pcl_block_grass" -> R.drawable.pcl_block_grass
+    "pcl_block_command_block" -> R.drawable.pcl_block_command_block
+    "pcl_block_cobblestone" -> R.drawable.pcl_block_cobblestone
+    "pcl_block_gold_block" -> R.drawable.pcl_block_gold_block
+    else -> null
+}
 
 private fun runPclPluginAction(
     action: PclPluginAction?,

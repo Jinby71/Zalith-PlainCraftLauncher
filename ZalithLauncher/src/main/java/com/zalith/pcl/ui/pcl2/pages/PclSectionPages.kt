@@ -433,9 +433,16 @@ fun PclDownloadLeft(nav: PclNavController) {
                 5, PclLeftLabels.downloadShader, PclIcons.dlShader, 1.04f,
                 listOf(refreshButton(onClick = { PclDownloadRefresh.trigger() })),
             ),
-        ) + PclUiRuntime.entries
-            .filter { it.section == "download" }
-            .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page) },
+        ).let { base ->
+            // 插件入口：position=top 的紧跟「原版游戏」，其余追加到末尾
+            val mine = PclUiRuntime.entries.filter { it.section == "download" }
+            val top = mine.filter { it.position == "top" }
+                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page) }
+            val end = mine.filter { it.position != "top" }
+                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page) }
+            // base = [原版游戏, 「社区资源」分组, Mod, …]，插在第一个条目之后
+            base.take(1) + top + base.drop(1) + end
+        },
     )
 }
 

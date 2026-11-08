@@ -174,6 +174,11 @@ data class PclPluginEntry(
     val section: String,
     val label: String,
     val page: String,
+    /**
+     * 排在哪：`top` = 紧跟版块的第一个系统条目（比如「原版游戏」后面），
+     * `end` = 追加到最后（默认）。
+     */
+    val position: String = "end",
 )
 
 /** 一个版块的接管声明：左栏和内容区各指向一个页面 id（都可以缺）。 */
@@ -199,6 +204,7 @@ private data class EntryJson(
     @SerializedName("section") val section: String? = null,
     @SerializedName("label") val label: String? = null,
     @SerializedName("page") val page: String? = null,
+    @SerializedName("position") val position: String? = null,
 )
 
 private data class PagesJson(
@@ -271,7 +277,13 @@ fun parsePclPluginEntries(json: String, pluginId: String): List<PclPluginEntry> 
         val section = item.section?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
         val label = item.label?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
         val page = item.page?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-        PclPluginEntry(pluginId = pluginId, section = section, label = label, page = page)
+        PclPluginEntry(
+            pluginId = pluginId,
+            section = section,
+            label = label,
+            page = page,
+            position = item.position?.trim()?.lowercase()?.takeIf { it == "top" } ?: "end",
+        )
     }
 }
 

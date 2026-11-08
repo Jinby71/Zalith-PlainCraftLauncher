@@ -18,7 +18,66 @@
 
 三类可以叠在一个 APK 里。本文主要讲第三类（它同时能用页面协议）。
 
-## 二、目录结构
+## 二、开放接口（对外契约）
+
+插件能依赖的只有下面这些。标 ✅ 的是稳定契约，改名会走大版本；🧪 能用但细节可能补；
+启动器内部实现（`PclUiRuntime`、渲染器、皮肤字段、`plugins/<id>/` 目录布局）**不是接口**，别依赖。
+
+### 2.1 插件 → 启动器：配置接口
+
+| 接口 | 位置 | 自 | 状态 |
+|---|---|---|---|
+| `plugin.json` 清单（`name`/`version`/`author`/`description`/`target`/`enabled`/`ui`/`entry`/`label`） | APK 资源 | 1.4.0 | ✅ |
+| `pages` 页面（`id`/`title`/`left`/`blocks`/`footer`/`layout`） | pages.json | 1.4.0 | ✅（`footer`、`layout` 🧪） |
+| `sections` 整块接管版块 | pages.json | 1.4.1 | ✅ |
+| `entries` 左栏追加条目（`position`） | pages.json | 1.4.1 | ✅ |
+| `entries[].display = content` 画在主栏 | pages.json | 1.4.3 | ✅ |
+| 积木 11 种 | pages.json | 1.4.0~1.4.2 | ✅（`icon`、`version_collection` 🧪） |
+| 动作 9 种 | pages.json | 1.4.0~1.4.1 | ✅ |
+| `button.primary` 主按钮 | pages.json | 1.4.1 | ✅ |
+| `status` 按包名显示安装状态 | pages.json | 1.4.1 | ✅ |
+
+### 2.2 插件 → 启动器：运行时数据
+
+| 接口 | 形式 | 自 | 状态 |
+|---|---|---|---|
+| 版本列表 `method` | `content://<包名>.pclplugin` 的 `call(method, "")` → `Bundle.json` | 1.4.2 | 🧪 |
+| 下载源 `detail_method` | `call(method, "<版本id>\n<option>")` → `Bundle.json` | 1.4.2 | 🧪 |
+| 错误返回 | Bundle 里放 `error`，启动器原样显示 | 1.4.2 | 🧪 |
+
+### 2.3 启动器 → 插件
+
+| 接口 | 形式 | 自 | 状态 |
+|---|---|---|---|
+| 打开插件界面 | `getLaunchIntentForPackage(包名)` | 1.4.0 | ✅ |
+| 启动任意应用 | 动作 `{"type":"app","package":"…"}` | 1.4.1 | ✅ |
+| 打开应用信息页 | 动作 `{"type":"app_info","package":"…"}` | 1.4.1 | ✅ |
+
+启动器**不会**加载插件 dex、不绑定 AIDL、不反向调用你 Activity 里的方法、不传任何内部对象。
+
+### 2.4 行为契约
+
+| 行为 | 说明 | 自 |
+|---|---|---|
+| 插件识别 | APK 内有 `assets/zplugin/plugin.json` 即认定 | 1.4.0 |
+| 启用状态 | 停用不删文件，`pages.json` 不加载 | 1.4.0 |
+| 升级重解包 | 插件 APK 的 **versionCode 变了**才重新解包 | 1.4.6 |
+| 页面热加载 | 进首页重读 `pages.json`，无需重启 | 1.4.1 |
+| 动作白名单 | 只执行 2.1 列出的 9 种动作，其余忽略 | 1.4.0 |
+
+### 2.5 版本矩阵
+
+| 启动器 | 新增的开放接口 |
+|---|---|
+| 1.4.0 | 清单、页面、基础积木与动作 |
+| 1.4.1 | `launch`/`status`/`open`/`copy`/`install`/`app`/`app_info`、`sections`、`entries`、`primary`、热加载 |
+| 1.4.2 | `version_collection`、ContentProvider 数据通道 |
+| 1.4.3 | `entries[].display = content` |
+| 1.4.4 | 下载源原生选择（数据契约不变） |
+| 1.4.5 | `entries` 支持 `setup` 版块 |
+| 1.4.6 | 升级重解包（行为修复） |
+
+## 三、目录结构
 
 ```
 assets/zplugin/
@@ -32,7 +91,7 @@ assets/zplugin/
 启动器判定「这是不是一个插件」的唯一标准：APK 里有没有 `assets/zplugin/plugin.json`。  
 没有就拒收，并提示「不是有效的插件 APK」。
 
-## 三、plugin.json
+## 四、plugin.json
 
 ```json
 {
@@ -62,7 +121,7 @@ assets/zplugin/
 
 > `entry: true` 时，启动器调用 `getLaunchIntentForPackage` 打开你的 app，不读你的代码。
 
-## 四、pages.json
+## 五、pages.json
 
 顶层三个数组：`pages`（页面）、`sections`（整块接管某版块）、`entries`（往某版块左栏加一条）。
 
@@ -75,7 +134,7 @@ assets/zplugin/
 }
 ```
 
-### 4.1 页面
+### 5.1 页面
 
 | 字段       | 说明                                         |
 | -------- | ------------------------------------------ |
@@ -86,7 +145,7 @@ assets/zplugin/
 | `footer` | 贴在底部的积木（不随滚动）                              |
 | `layout` | 布局名，默认 `scroll`                            |
 
-### 4.2 sections —— 整块接管
+### 5.2 sections —— 整块接管
 
 ```json
 { "section": "home", "left": "side", "content": "home" }
@@ -99,7 +158,7 @@ assets/zplugin/
 > 一旦接管了 `download`，这个版块的系统左栏就没了，`entries` 里的下载入口也不会显示。  
 > 两者对同一版块互斥。
 
-### 4.3 entries —— 往左栏加一条
+### 5.3 entries —— 往左栏加一条
 
 ```json
 { "section": "download", "label": "下载基岩版", "page": "bedrock-download",
@@ -116,7 +175,7 @@ assets/zplugin/
 
 `entries` 不受插件模式限制：装了就出现，点开就是插件那一页。
 
-### 4.4 积木（blocks）
+### 5.4 积木（blocks）
 
 | `type`               | 关键字段                               | 说明                                         |
 | -------------------- | ---------------------------------- | ------------------------------------------ |
@@ -130,9 +189,9 @@ assets/zplugin/
 | `space`              | `height`                           | 竖向留白，单位 dp（0–200）                          |
 | `status`             | `package`、`text`                   | 显示某应用的安装状态：`已安装 v1.21.90` / `未安装`；回到前台自动刷新 |
 | `icon`               | `resource`、`size`                  | 引用 `assets/zplugin/res/` 里的图片              |
-| `version_collection` | 见第五节                               | 插件供数据的版本列表，启动器用原生样式渲染                      |
+| `version_collection` | 见第六节                               | 插件供数据的版本列表，启动器用原生样式渲染                      |
 
-### 4.5 动作（action）
+### 5.5 动作（action）
 
 | `type`     | 字段        | 行为                                              |
 | ---------- | --------- | ----------------------------------------------- |
@@ -146,7 +205,7 @@ assets/zplugin/
 | `app`      | `package` | 启动另一个已安装的应用                                     |
 | `app_info` | `package` | 打开系统的「应用信息」页                                    |
 
-## 五、数据通道（版本列表 / 网盘源）
+## 六、数据通道（版本列表 / 网盘源）
 
 页面是静态数据，拿不到「此刻有多少个版本」。需要动态数据时，用 `version_collection` 积木，  
 由插件在自己的 app 里实现一个 **ContentProvider** 提供数据：
@@ -213,7 +272,7 @@ val error = bundle?.getString("error")    // 失败，会原样显示给用户
 
 > 启动器只发这两种调用、只渲染返回的条目。它不内置任何下载源，也不认识任何具体站点。
 
-## 六、安装、启用、升级
+## 七、安装、启用、升级
 
 | 行为      | 说明                                                                        |
 | ------- | ------------------------------------------------------------------------- |
@@ -226,7 +285,7 @@ val error = bundle?.getString("error")    // 失败，会原样显示给用户
 **升级时注意**：versionCode 一定要涨。只改 `plugin.json` 的 `version` 而 versionCode 不变，  
 启动器判定为「同一个版本」，不会重新解包。
 
-## 七、最小可运行示例
+## 八、最小可运行示例
 
 `assets/zplugin/plugin.json`
 
@@ -257,7 +316,7 @@ val error = bundle?.getString("error")    // 失败，会原样显示给用户
 打包时把这两个文件放进 `assets/zplugin/`，签名后安装即可：首页会出现「示例」胶囊，  
 点开就是这一页。
 
-## 八、排错表
+## 九、排错表
 
 | 症状                | 多半是                                                                         |
 | ----------------- | --------------------------------------------------------------------------- |
@@ -269,7 +328,7 @@ val error = bundle?.getString("error")    // 失败，会原样显示给用户
 | 提示「插件没有返回数据」      | Provider 返回了 null Bundle，或把错误写进了 `json` 而不是 `error`                         |
 | 下载源列表为空           | `url` 不是 http/https，或返回结构不是 `{"items":[...]}`                               |
 
-## 九、边界
+## 十、边界
 
 - 启动器**不加载**插件的代码，插件也拿不到启动器的进程内数据；
 - 页面能触发的动作就是上面那张表，没有文件读写、没有任意代码执行；

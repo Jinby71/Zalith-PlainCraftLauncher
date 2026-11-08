@@ -52,6 +52,7 @@ import com.zalith.pcl.ui.pcl2.PclSection
 import com.zalith.pcl.ui.pcl2.PclSubPage
 import com.zalith.pcl.ui.pcl2.components.PclButton
 import com.zalith.pcl.ui.pcl2.components.PclCard
+import com.zalith.pcl.ui.pcl2.components.PclColorState
 import com.zalith.pcl.ui.pcl2.components.PclHintTheme
 import com.zalith.pcl.ui.pcl2.components.PclSwitchItem
 import com.zalith.pcl.ui.pcl2.data.PclPluginAction
@@ -172,6 +173,8 @@ private fun PclPluginBlockView(
 
         is PclPluginBlock.Button -> PclButton(
             text = block.text,
+            colorState = if (block.primary) PclColorState.Highlight else PclColorState.Normal,
+            modifier = Modifier.fillMaxWidth(),
             onClick = { runPclPluginAction(block.action, all, pluginId, onInstall, onPush, onSection) },
         )
 
@@ -261,6 +264,7 @@ private fun runPclPluginAction(
         is PclPluginAction.Copy -> copyText(PclUiRuntime.appContext, action.text)
         is PclPluginAction.InstallApk -> onInstall()
         is PclPluginAction.LaunchApp -> launchPackage(PclUiRuntime.appContext, action.packageName)
+        is PclPluginAction.AppInfo -> openAppInfo(PclUiRuntime.appContext, action.packageName)
     }
 }
 
@@ -288,6 +292,16 @@ private fun copyText(context: Context?, text: String) {
         cm.setPrimaryClip(android.content.ClipData.newPlainText("插件", text))
     }.onSuccess { PclHintHost.push("已复制：$text", PclHintTheme.Green) }
         .onFailure { PclHintHost.push("复制失败。", PclHintTheme.Red) }
+}
+
+private fun openAppInfo(context: Context?, pkg: String) {
+    if (context == null) return
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.onFailure { PclHintHost.push("打不开这个应用的信息页。", PclHintTheme.Red) }
 }
 
 private fun launchPackage(context: Context?, pkg: String) {

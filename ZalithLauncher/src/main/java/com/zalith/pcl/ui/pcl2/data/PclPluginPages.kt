@@ -72,8 +72,12 @@ sealed interface PclPluginBlock {
     /** 横排。 */
     data class Row(val blocks: List<PclPluginBlock>) : PclPluginBlock
 
-    /** 按钮。 */
-    data class Button(val text: String, val action: PclPluginAction?) : PclPluginBlock
+    /** 按钮。[primary] = 主按钮（高亮色），用来表达「启动游戏」这类主要动作。 */
+    data class Button(
+        val text: String,
+        val action: PclPluginAction?,
+        val primary: Boolean = false,
+    ) : PclPluginBlock
 
     /** 开关。状态由插件页面自己保存（运行期），不落盘。 */
     data class Switch(
@@ -131,6 +135,9 @@ sealed interface PclPluginAction {
 
     /** 启动另一个已安装的应用。 */
     data class LaunchApp(val packageName: String) : PclPluginAction
+
+    /** 打开系统的「应用信息」页（版本、权限、卸载都在那儿）。 */
+    data class AppInfo(val packageName: String) : PclPluginAction
 }
 
 /* ---------------------------------------------------------------- 解析 */
@@ -150,6 +157,7 @@ private data class BlockJson(
     @SerializedName("title") val title: String? = null,
     @SerializedName("muted") val muted: Boolean? = null,
     @SerializedName("checked") val checked: Boolean? = null,
+    @SerializedName("primary") val primary: Boolean? = null,
     @SerializedName("height") val height: Int? = null,
     @SerializedName("blocks") val blocks: List<BlockJson>? = null,
     @SerializedName("action") val action: ActionJson? = null,
@@ -239,7 +247,7 @@ private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase
     )
     "row" -> PclPluginBlock.Row(blocks.orEmpty().mapNotNull { it.toBlock() })
     "button" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let {
-        PclPluginBlock.Button(it, action?.toAction())
+        PclPluginBlock.Button(it, action?.toAction(), primary == true)
     }
     "switch", "toggle" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let {
         PclPluginBlock.Switch(it, checked == true, action?.toAction())
@@ -263,5 +271,6 @@ private fun ActionJson.toAction(): PclPluginAction? = when (type?.trim()?.lowerc
         ?: PclPluginAction.Launch
     "copy" -> text?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.Copy(it) }
     "app", "launch_app" -> pkg?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.LaunchApp(it) }
+    "app_info", "settings" -> pkg?.trim()?.takeIf { it.isNotEmpty() }?.let { PclPluginAction.AppInfo(it) }
     else -> null
 }

@@ -488,19 +488,27 @@ private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime)
 
         val selected = entryPlugins.firstOrNull { it.id == PclPluginMode.activeId }
         if (selected != null) {
-            // 左栏只留一句说明，内容在右栏那一页（插件写的）
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                PclText(text = selected.label.ifBlank { selected.name }, fontSize = 20, bold = true)
-                Spacer(Modifier.height(10.dp))
-                PclText(
-                    text = selected.description.ifBlank { "内容由插件提供。" },
-                    fontSize = 12,
-                    color = p.gray2,
-                )
+            // 选中插件后左栏：优先用插件给的「首页左栏」那一页（启动游戏/选择版本/版本设置
+            // 这些按钮都由插件写）；没给就退回一句说明。
+            val leftPage = PclPluginMode.page(PclPluginMode.section(PclSection.Home)?.left)
+            if (leftPage != null) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    PclPluginPageInline(leftPage)
+                }
+            } else {
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    PclText(text = selected.label.ifBlank { selected.name }, fontSize = 20, bold = true)
+                    Spacer(Modifier.height(10.dp))
+                    PclText(
+                        text = selected.description.ifBlank { "内容由插件提供。" },
+                        fontSize = 12,
+                        color = p.gray2,
+                    )
+                }
             }
             return
         }

@@ -117,6 +117,7 @@ import com.zalith.pcl.game.version.download.DownloadFailedException
 import com.zalith.pcl.game.versioninfo.MinecraftVersion
 import com.zalith.pcl.game.versioninfo.MinecraftVersions
 import com.zalith.pcl.path.PathManager
+import com.zalith.pcl.ui.pcl2.data.PclPluginEntry
 import com.zalith.pcl.ui.pcl2.components.PclButton
 import com.zalith.pcl.ui.pcl2.components.PclCard
 import com.zalith.pcl.ui.pcl2.components.PclCheckBox
@@ -434,17 +435,22 @@ fun PclDownloadLeft(nav: PclNavController) {
                 5, PclLeftLabels.downloadShader, PclIcons.dlShader, 1.04f,
                 listOf(refreshButton(onClick = { PclDownloadRefresh.trigger() })),
             ),
-        ).let { base ->
-            // 插件入口：position=top 的紧跟「原版游戏」，其余追加到末尾
-            val mine = PclUiRuntime.entries.filter { it.section == "download" }
-            val top = mine.filter { it.position == "top" }
-                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page, it.display) }
-            val end = mine.filter { it.position != "top" }
-                .map { PclLeftEntry.Plugin(it.pluginId, it.label, it.page, it.display) }
-            // base = [原版游戏, 「社区资源」分组, Mod, …]，插在第一个条目之后
-            base.take(1) + top + base.drop(1) + end
-        },
+        ).withPluginEntries("download"),
     )
+}
+
+/**
+ * 把插件声明的左栏入口并进来（**启动器只提供这个接口**，条目叫什么、指向哪一页都由插件说）。
+ *
+ * `position = top` 的插在第一个系统条目之后（与它并列），其余追加到末尾。
+ */
+private fun List<PclLeftEntry>.withPluginEntries(section: String): List<PclLeftEntry> {
+    val mine = PclUiRuntime.entries.filter { it.section == section }
+    if (mine.isEmpty()) return this
+    fun PclPluginEntry.toLeft() = PclLeftEntry.Plugin(pluginId, label, page, display)
+    val top = mine.filter { it.position == "top" }.map { it.toLeft() }
+    val end = mine.filter { it.position != "top" }.map { it.toLeft() }
+    return take(1) + top + drop(1) + end
 }
 
 /** `PageDownload` 右侧：0 为原版游戏安装页，其余为社区资源页。 */
@@ -3335,7 +3341,8 @@ fun PclSetupLeft(nav: PclNavController) {
             PclLeftEntry.Item(
                 8, PclLeftLabels.setupPlugin, PclIcons.setupPlugin, 0.9f,
             ),
-        ).filterIndexed { index, _ -> !PclSkinSettings.shouldHide(PCL_SETUP_KEYS.getOrElse(index) { "" }) },
+        ).filterIndexed { index, _ -> !PclSkinSettings.shouldHide(PCL_SETUP_KEYS.getOrElse(index) { "" }) }
+            .withPluginEntries("setup"),
     )
 }
 

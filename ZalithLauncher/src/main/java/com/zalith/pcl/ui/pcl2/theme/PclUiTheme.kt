@@ -59,6 +59,7 @@ import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.zalith.pcl.ui.pcl2.data.PclPluginPageSpec
+import com.zalith.pcl.ui.pcl2.data.PclPluginSection
 
 /** 渲染器：决定“表面”怎么画。 */
 enum class PclUiRenderer {
@@ -684,6 +685,14 @@ object PclUiRuntime {
      * 「布局槽位」要在渲染版块时按 id 找页面，而那个位置拿不到插件目录。
      */
     var pages by mutableStateOf<List<PclPluginPageSpec>>(emptyList())
+
+    /**
+     * 每个插件声明的「接管哪些版块」：插件 id → (版块名 → 左栏/内容页 id)。
+     *
+     * 与 [pages] 同时加载。选中某个插件后（见 `PclPluginMode`），被接管的版块
+     * 就渲染这里指的页面 —— 启动器不需要知道那一页里是什么。
+     */
+    var sectionsByPlugin by mutableStateOf<Map<String, Map<String, PclPluginSection>>>(emptyMap())
 
     /** 当前皮肤插件的目录（`ui.json` 里的素材路径相对于它）。 */
     var assetDir by mutableStateOf<java.io.File?>(null)

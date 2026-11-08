@@ -155,6 +155,7 @@ import com.zalith.pcl.ui.pcl2.theme.PclGlassQuality
 import com.zalith.pcl.ui.pcl2.theme.PclSlotOverride
 import com.zalith.pcl.ui.pcl2.theme.PclUiTheme
 import com.zalith.pcl.ui.pcl2.data.parsePclPluginPages
+import com.zalith.pcl.ui.pcl2.data.parsePclPluginSections
 import com.zalith.pcl.ui.pcl2.pages.PclPluginPageInline
 import com.zalith.pcl.ui.pcl2.theme.PclUiRuntime
 import com.zalith.pcl.ui.pcl2.theme.pclGlassSupported
@@ -412,6 +413,14 @@ fun PclMainScreen(
                 ZlPluginManager.activePages(context).flatMap { parsePclPluginPages(it.json, it.pluginId) }
             }.getOrDefault(emptyList())
         }
+        // 版块接管声明：插件说「下载/版本设置这几页归我」，启动器就按 id 去渲染它的页面。
+        PclUiRuntime.sectionsByPlugin = withContext(Dispatchers.IO) {
+            runCatching {
+                ZlPluginManager.activePages(context).associate { it.pluginId to parsePclPluginSections(it.json) }
+                    .filterValues { it.isNotEmpty() }
+            }.getOrDefault(emptyMap())
+        }
+        PclPluginMode.ensureLoaded()
         PclLoginSettings.load(context)
         // 背景图片 / 背景音乐 / 标题图片 / 自定义主页（PageSetupUI 的另外几张卡）
         PclAppearance.load(context)
@@ -1268,8 +1277,15 @@ private fun PclBody(nav: PclNavController) {
                         // MyPageLeft.TriggerShowAnimation：左栏整页重建时才逐个入场，
                         // 因此把左栏内容按 sectionToken 分组；点击左栏条目不会重建它（与 PCL 一致）。
                         key(nav.sectionToken) {
+                            // 首页的左栏要留给「Java 版 / 插件」那排胶囊，不接管
+                            val modePage = if (nav.section == PclSection.Home) null else PclPluginMode.page(
+                                PclPluginMode.section(nav.section)?.left
+                            )
                             if (sub != null) {
                                 sub.leftContent?.invoke()
+                            } else if (modePage != null) {
+                                // 当前插件接管了这一版块的左栏
+                                PclPluginPageInline(modePage)
                             } else if (PclUiRuntime.pageById(nav.section.slotOverride()?.left) != null) {
                                 // 插件把这一版块的左栏接管了
                                 PclPluginPageInline(PclUiRuntime.pageById(nav.section.slotOverride()!!.left)!!)
@@ -1287,8 +1303,14 @@ private fun PclBody(nav: PclNavController) {
 
                     // 右侧内容
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        val modeContent = PclPluginMode.page(
+                            PclPluginMode.section(nav.section)?.content
+                        )
                         if (sub != null) {
                             sub.content()
+                        } else if (modeContent != null) {
+                            // 当前插件接管了这一版块的内容区（整页切换）
+                            PclPluginPageInline(modeContent)
                         } else if (PclUiRuntime.pageById(nav.section.slotOverride()?.content) != null) {
                             // 插件把这一版块的内容区接管了
                             PclPluginPageInline(PclUiRuntime.pageById(nav.section.slotOverride()!!.content)!!)

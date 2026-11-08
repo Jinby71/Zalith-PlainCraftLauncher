@@ -162,6 +162,7 @@ import com.zalith.pcl.ui.pcl2.data.rememberRemoteText
 import com.zalith.pcl.ui.pcl2.data.PclHomeType
 import com.zalith.pcl.ui.pcl2.data.PclRuntime
 import com.zalith.pcl.ui.pcl2.pages.pclInstanceVersionPage
+import com.zalith.pcl.ui.pcl2.pages.PclPluginPageInline
 import com.zalith.pcl.ui.pcl2.pages.pclPluginSubPage
 import com.zalith.pcl.ui.pcl2.pages.pclVersionSelectPage
 import com.zalith.pcl.ui.pcl2.theme.PclMotion
@@ -435,39 +436,30 @@ private fun PclLaunchTaskRow(titled: TitledTask, context: android.content.Contex
     }
 }
 
-/** 首页入口胶囊记住的那个插件 id（空串 = Java 版）。 */
-private const val ENTRY_PLUGIN_KEY = "pcl2.launch.entry"
-
 /** `PanInput` —— 未启动时的首页左栏。 */
 @Composable
 private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime) {
     val p = pclPalette
     val context = LocalContext.current
 
-    // ---- 「Java 版 / 插件入口」切换 ----
+    // ---- 顶部：Java 版 / 各个「自带界面」的插件 ----
     //
-    // 谁是入口由插件自己在 `plugin.json` 里声明（`entry` / `label`），启动器里没有
-    // 任何一个插件专用包名：装了就出现，卸了就消失。没有这类插件时整行不显示，
-    // 首页与原来完全一致。
+    // 谁是入口、叫什么，全由插件自己的 plugin.json（entry / label）声明。
+    // 选中之后不是跳出去，而是把整页交给插件在 pages.json 里声明的那一页
+    // （见 PclPluginMode / PclHomeRight），启动器不认识任何具体插件。
+    PclPluginMode.ensureLoaded()
     var entryPlugins by remember { mutableStateOf<List<ZlPlugin>>(emptyList()) }
-    var currentEntry by remember {
-        mutableStateOf(launcherMMKV().getString(ENTRY_PLUGIN_KEY, "").orEmpty())
-    }
-
-    fun selectEntry(id: String) {
-        currentEntry = id
-        launcherMMKV().putString(ENTRY_PLUGIN_KEY, id)
-    }
 
     LaunchedEffect(Unit) {
-        // 装完插件 APK 回到启动器就该看得见：这里顺手认一次「已安装的插件」，
-        // 不必等用户先去设置里打开插件管理页。
+        // 装完插件 APK 回到启动器就该看得见，不必先进设置里的插件管理页
         val found = withContext(Dispatchers.IO) {
             runCatching { ZlPluginManager.recognizeInstalled(context) }.getOrDefault(emptyList())
         }.filter { it.enabled && it.entry }
         entryPlugins = found
-        // 选中的插件被卸载/停用就退回 Java 版，别停在一个点不动的空页面上
-        if (currentEntry.isNotBlank() && found.none { it.id == currentEntry }) selectEntry("")
+        // 选中的插件被卸载/停用就退回 Java 版
+        if (PclPluginMode.activeId.isNotBlank() && found.none { it.id == PclPluginMode.activeId }) {
+            PclPluginMode.set("")
+        }
     }
 
     if (entryPlugins.isNotEmpty()) {
@@ -479,58 +471,35 @@ private fun ColumnScope.PclHomeInput(nav: PclNavController, runtime: PclRuntime)
             PclPillButton(
                 text = "Java 版",
                 highlight = true,
-                checked = currentEntry.isBlank(),
+                checked = PclPluginMode.activeId.isBlank(),
                 modifier = Modifier.padding(horizontal = 4.dp),
-                onClick = { selectEntry("") },
+                onClick = { PclPluginMode.set("") },
             )
             entryPlugins.forEach { plugin ->
                 PclPillButton(
                     text = plugin.label.ifBlank { plugin.name },
                     highlight = true,
-                    checked = currentEntry == plugin.id,
+                    checked = PclPluginMode.activeId == plugin.id,
                     modifier = Modifier.padding(horizontal = 4.dp),
-                    onClick = {
-                        selectEntry(plugin.id)
-                        // 只在启动器里切：插件给了页面，就地把那一页推上来。
-                        // 页面是插件写的（pages.json），启动器只负责渲染积木。
-                        val page = PclUiRuntime.pages.firstOrNull { it.pluginId == plugin.id }
-                        if (page != null) nav.push(pclPluginSubPage(page))
-                    },
+                    onClick = { PclPluginMode.set(plugin.id) },
                 )
             }
         }
 
-        val selected = entryPlugins.firstOrNull { it.id == currentEntry }
+        val selected = entryPlugins.firstOrNull { it.id == PclPluginMode.activeId }
         if (selected != null) {
-            val title = selected.label.ifBlank { selected.name }
+            // 左栏只留一句说明，内容在右栏那一页（插件写的）
             Column(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                PclText(text = title, fontSize = 20, bold = true)
+                PclText(text = selected.label.ifBlank { selected.name }, fontSize = 20, bold = true)
                 Spacer(Modifier.height(10.dp))
                 PclText(
-                    text = selected.description.ifBlank { "版本管理与启动由这个插件提供。" },
+                    text = selected.description.ifBlank { "内容由插件提供。" },
                     fontSize = 12,
                     color = p.gray2,
-                )
-                if (PclUiRuntime.pages.any { it.pluginId == selected.id }) {
-                    PclText(
-                        text = "这个插件自带页面，点上面的胶囊就能在启动器里打开。",
-                        fontSize = 11,
-                        color = p.gray3,
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                PclButton(
-                    text = "打开$title",
-                    colorState = PclColorState.Highlight,
-                    onClick = {
-                        if (!ZlPluginManager.launch(context, selected)) {
-                            PclHintHost.push("这个插件没有可启动的界面。", PclHintTheme.Red)
-                        }
-                    },
                 )
             }
             return
@@ -1905,6 +1874,13 @@ private fun PclOfflineLoginPanel(
 /** `PageLaunchRight` —— 右侧信息流：提示条 + 自定义主页 + 启动日志卡片。 */
 @Composable
 fun PclHomeRight(nav: PclNavController) {
+    // 插件模式：首页整块换成插件声明的页面（内容全在插件里）
+    PclPluginMode.ensureLoaded()
+    PclPluginMode.homePage()?.let { page ->
+        PclPluginPageInline(page)
+        return
+    }
+
     // PanCustom（自定义主页）：PCL 在 `UiCustomType` 为 预设/本地/联网 时把启动页
     // 右侧整块换成自定义主页，左边的账户 / 版本面板照旧。
     val context = LocalContext.current

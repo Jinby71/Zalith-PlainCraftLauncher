@@ -156,6 +156,12 @@ private data class BlockJson(
     @SerializedName("package") val pkg: String? = null,
 )
 
+/** 一个版块的接管声明：左栏和内容区各指向一个页面 id（都可以缺）。 */
+data class PclPluginSection(
+    val left: String? = null,
+    val content: String? = null,
+)
+
 private data class PageJson(
     @SerializedName("id") val id: String? = null,
     @SerializedName("title") val title: String? = null,
@@ -163,8 +169,15 @@ private data class PageJson(
     @SerializedName("blocks") val blocks: List<BlockJson>? = null,
 )
 
+private data class SectionJson(
+    @SerializedName("section") val section: String? = null,
+    @SerializedName("left") val left: String? = null,
+    @SerializedName("content") val content: String? = null,
+)
+
 private data class PagesJson(
     @SerializedName("pages") val pages: List<PageJson>? = null,
+    @SerializedName("sections") val sections: List<SectionJson>? = null,
 )
 
 private val pagesGson = Gson()
@@ -192,6 +205,27 @@ fun parsePclPluginPages(json: String, pluginId: String = ""): List<PclPluginPage
             },
         )
     }
+}
+
+/**
+ * 解析 `pages.json` 顶层的 `sections`：
+ *
+ * ```json
+ * "sections": [ { "section": "download", "left": "dl-left", "content": "dl-main" } ]
+ * ```
+ *
+ * 含义是「这个版块由我接管」。启动器只管按声明的 id 去渲染，不关心版块里是什么内容。
+ */
+fun parsePclPluginSections(json: String): Map<String, PclPluginSection> {
+    val raw = runCatching { pagesGson.fromJson(json, PagesJson::class.java) }.getOrNull()
+        ?: return emptyMap()
+    return raw.sections.orEmpty().mapNotNull { item ->
+        val name = item.section?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        val left = item.left?.trim()?.takeIf { it.isNotEmpty() }
+        val content = item.content?.trim()?.takeIf { it.isNotEmpty() }
+        if (left == null && content == null) return@mapNotNull null
+        name to PclPluginSection(left = left, content = content)
+    }.toMap()
 }
 
 private fun BlockJson.toBlock(): PclPluginBlock? = when (type?.trim()?.lowercase()) {

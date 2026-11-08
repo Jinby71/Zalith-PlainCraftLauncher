@@ -64,7 +64,6 @@ import com.zalith.pcl.ui.pcl2.components.PclSwitchItem
 import com.zalith.pcl.ui.pcl2.components.PclListItem
 import com.zalith.pcl.ui.pcl2.components.PclListItemType
 import com.zalith.pcl.ui.pcl2.components.PclSearchBox
-import com.zalith.pcl.ui.pcl2.components.PclSelectDialog
 import com.zalith.pcl.ui.pcl2.components.rememberPclRowChunks
 import com.zalith.pcl.ui.pcl2.data.PclPluginAction
 import com.zalith.pcl.ui.pcl2.data.PclPluginBlock
@@ -332,14 +331,7 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
     var error by remember(block, plugin?.pkg) { mutableStateOf<String?>(null) }
     var detailError by remember { mutableStateOf<String?>(null) }
     var loadingDetails by remember { mutableStateOf(false) }
-    var detailReloadKey by remember { mutableStateOf(0) }
     var reloadKey by remember(block, plugin?.pkg) { mutableStateOf(0) }
-    fun chooseVersion(item: PluginVersionItem) {
-        selected = item
-        sources = emptyList()
-        detailError = null
-        loadingDetails = true
-    }
     val groupLogos = remember(block.groupIcons) {
         block.groupIcons.mapNotNull { (group, resourceName) ->
             genericPluginIconResource(resourceName)?.let { group to it }
@@ -409,7 +401,7 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
         }
         val selectedVersion = selected
         if (selectedVersion != null) {
-            LaunchedEffect(selectedVersion.id, selectedOption, detailReloadKey) {
+            LaunchedEffect(selectedVersion.id, selectedOption) {
                 loadingDetails = true
                 detailError = null
                 runCatching {
@@ -428,56 +420,37 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
                     .onFailure { detailError = it.message ?: "无法加载下载源。" }
                 loadingDetails = false
             }
-            when {
-                loadingDetails -> PclCard(title = "选择下载源（${selectedVersion.title}）", modifier = Modifier.fillMaxWidth()) {
-                    Text("正在加载下载源…", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
-                }
-
-                detailError != null -> PclCard(title = "选择下载源（${selectedVersion.title}）", modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(detailError.orEmpty(), style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PclButton(text = "重试", onClick = { detailReloadKey++ })
-                            PclButton(text = "返回版本列表", onClick = { selected = null; detailError = null })
-                        }
+            PclCard(title = selectedVersion.title, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (selectedVersion.subtitle.isNotBlank()) {
+                        Text(selectedVersion.subtitle, style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
                     }
-                }
-
-                sources.isEmpty() -> PclCard(title = "选择下载源（${selectedVersion.title}）", modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("没有可用的下载源。", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
-                        PclButton(text = "返回版本列表", onClick = { selected = null })
+                    if (loadingDetails) {
+                        Text("正在加载下载源…", style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
                     }
-                }
-
-                else -> PclSelectDialog(
-                    title = "选择下载源（${selectedVersion.title}）",
-                    options = sources.map { source ->
-                        val label = if (source.password.isBlank()) source.title else "${source.title} · 提取码 ${source.password}"
-                        source.url to label
-                    },
-                    current = sources.firstOrNull()?.url,
-                    onSelect = { url ->
-                        sources.firstOrNull { it.url == url }?.let { source ->
-                            if (source.password.isNotBlank()) {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("提取码", source.password))
-                                PclHintHost.push("提取码已复制。", PclHintTheme.Green)
-                            }
+                    sources.forEach { source ->
+                        PclButton(text = source.title, modifier = Modifier.fillMaxWidth(), onClick = {
                             runCatching {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source.url)))
                             }.onFailure { PclHintHost.push("没有可打开此链接的应用。", PclHintTheme.Red) }
+                        })
+                        if (source.password.isNotBlank()) {
+                            PclButton(text = "复制提取码：${source.password}", modifier = Modifier.fillMaxWidth(), onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("提取码", source.password))
+                                PclHintHost.push("已复制。", PclHintTheme.Green)
+                            })
                         }
+                    }
+                    if (sources.isEmpty() && !loadingDetails && detailError != null) {
+                        Text(detailError.orEmpty(), style = PclTextStyle.base(pclPalette).copy(color = pclPalette.gray2))
+                    }
+                    PclButton(text = "返回版本列表", onClick = {
                         selected = null
                         sources = emptyList()
                         detailError = null
-                    },
-                    onDismiss = {
-                        selected = null
-                        sources = emptyList()
-                        detailError = null
-                    },
-                )
+                    })
+                }
             }
         } else if (loading) {
             PclCard(title = block.title, modifier = Modifier.fillMaxWidth()) {
@@ -500,7 +473,9 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
                 values = visible,
                 logoRes = block.groups.firstNotNullOfOrNull { groupLogos[it] },
             ) { item ->
-                chooseVersion(item)
+                selected = item
+                sources = emptyList()
+                detailError = null
             }
         } else {
             val latest = visible.filter { it.latest }
@@ -515,21 +490,27 @@ private fun PclPluginVersionCollection(block: PclPluginBlock.VersionCollection, 
                     values = latest,
                     logoRes = block.groups.firstNotNullOfOrNull { groupLogos[it] },
                 ) { item ->
-                    chooseVersion(item)
+                    selected = item
+                    sources = emptyList()
+                    detailError = null
                 }
             }
             block.groups.forEach { group ->
                 val values = visible.filter { !it.latest && it.group == group }
                 if (values.isNotEmpty()) {
                     PclPluginVersionGroup(title = "$group (${values.size})", values = values, collapsed = true, logoRes = groupLogos[group]) { item ->
-                        chooseVersion(item)
+                        selected = item
+                        sources = emptyList()
+                        detailError = null
                     }
                 }
             }
             val ungrouped = visible.filter { !it.latest && it.group !in block.groups }
             if (ungrouped.isNotEmpty()) {
                 PclPluginVersionGroup(title = "其他 (${ungrouped.size})", values = ungrouped, collapsed = true) { item ->
-                    chooseVersion(item)
+                    selected = item
+                    sources = emptyList()
+                    detailError = null
                 }
             }
         }

@@ -122,6 +122,8 @@ data class ZlPlugin(
     val entry: Boolean = false,
     /** 入口显示名；为空时用 [name]。 */
     val label: String = "",
+    /** 插件 APK 自己的 versionCode（`meta.json` 里记的）。 */
+    val pkgCode: Long = 0,
 ) {
     /** 是否界面皮肤插件。 */
     val isTheme: Boolean get() = ui.isNotBlank() || hasUiSpec
@@ -165,6 +167,8 @@ private data class PluginMeta(
     /** 自带界面（见 [PluginManifest.entry]）。 */
     val entry: Boolean = false,
     val label: String = "",
+    /** 插件 APK 自己的 versionCode：升级后据此重新解包。 */
+    val pkgCode: Long = 0,
 )
 
 /** `applied.json`：启用时记下动了哪些文件，停用时才好精确还原。 */
@@ -475,7 +479,6 @@ object ZlPluginManager {
         rejected: MutableList<String>,
     ) {
         val pm = context.packageManager
-        val known = list(context).map { it.id }.toSet()
         val packages = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
 
         packages.forEach { info ->
@@ -499,8 +502,13 @@ object ZlPluginManager {
                 return@forEach
             }
 
-            if (sanitizeId(pkg) in known) {
-                // 已经装过同一个包，不重复安装
+            val existing = list(context).firstOrNull { it.id == sanitizeId(pkg) }
+            if (existing != null && existing.pkgCode == info.longVersionCode) {
+                // 已经装过**同一个版本**：跳过。
+                //
+                // 以前这里是「目录里有同 id 就 return」，于是用户装了新版插件 APK 之后，
+                // 目录里还是旧的 pages.json / 素材 —— 表现就是「插件升级了但界面没变」，
+                // 只能删掉重装。现在按插件包自己的 versionCode 比，换过就重新解包。
                 records += ScanRecord(path = key)
                 return@forEach
             }
@@ -672,6 +680,7 @@ object ZlPluginManager {
                 pkg = pkgName.orEmpty(),
                 entry = manifest.entry,
                 label = manifest.label.trim(),
+                pkgCode = pkgInfo.longVersionCode,
             )
 
             // 皮肤的渲染参数：原样存一份到插件目录，界面那边直接读这个文件
@@ -730,6 +739,7 @@ object ZlPluginManager {
             pkg = meta.pkg.ifBlank { meta.id },
             entry = meta.entry,
             label = meta.label,
+            pkgCode = meta.pkgCode,
         )
 
         // ⑤ 默认启用：与「资源包放进去就生效」一致；启用失败不影响安装本身
@@ -775,6 +785,7 @@ object ZlPluginManager {
             pkg = meta.pkg.ifBlank { meta.id.ifBlank { dir.name } },
             entry = meta.entry,
             label = meta.label,
+            pkgCode = meta.pkgCode,
         )
     }
 

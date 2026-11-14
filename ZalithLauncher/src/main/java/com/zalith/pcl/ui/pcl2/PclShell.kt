@@ -76,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -231,8 +232,20 @@ class PclNavController(initial: PclSection = PclSection.Home) {
         private set
     var leftIndex by mutableIntStateOf(0)
         private set
-    var subPage by mutableStateOf<PclSubPage?>(null)
-        private set
+    /**
+     * 二级页**栈**。
+     *
+     * 【血泪】原来只有一个槽位：`push()` 是覆盖、`back()` 是置空。于是
+     * 「资源详情 → 点前置资源 → 另一个资源详情」这条最常见的下钻路径里，
+     * 点前置时上一层详情被直接顶掉，返回就一路弹回版块首页 —— 用户看到的是
+     * 「选了前置再返回，怎么回主页了」。
+     * 现在按栈来：push 入栈、back 弹一层，`go()`（切版块）才整栈清空。
+     */
+    private val subStack = mutableStateListOf<PclSubPage>()
+
+    /** 当前显示的二级页 = 栈顶。 */
+    val subPage: PclSubPage?
+        get() = subStack.lastOrNull()
     /** 插件页在当前版块主栏中的选择；不进入二级页。 */
     var pluginContent by mutableStateOf<Pair<String, String>?>(null)
         private set
@@ -255,7 +268,7 @@ class PclNavController(initial: PclSection = PclSection.Home) {
     fun go(target: PclSection, index: Int = 0) {
         section = target
         leftIndex = index
-        subPage = null
+        subStack.clear()
         pluginContent = null
         sectionToken++
         pageToken++
@@ -276,16 +289,24 @@ class PclNavController(initial: PclSection = PclSection.Home) {
         pageToken++
     }
 
-    /** 进入二级页面。 */
+    /** 进入二级页面：入栈，返回时回到上一层（而不是直接跳回版块首页）。 */
     fun push(page: PclSubPage) {
-        subPage = page
+        subStack.add(page)
         sectionToken++
         pageToken++
     }
 
-    /** 返回上一级。 */
+    /** 返回上一级：弹一层；栈空时回到版块本身。 */
     fun back() {
-        subPage = null
+        if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex)
+        sectionToken++
+        pageToken++
+    }
+
+    /** 清空二级页栈（切版块、从外部跳转回来时用）。 */
+    fun clearSubPages() {
+        if (subStack.isEmpty()) return
+        subStack.clear()
         sectionToken++
         pageToken++
     }

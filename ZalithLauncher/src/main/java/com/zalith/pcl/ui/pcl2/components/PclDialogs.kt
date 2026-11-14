@@ -29,6 +29,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -309,10 +310,17 @@ private fun PclMsgFrame(
     )
     // 注意：进出动画由外层 [PclDialogContainer] 负责（它包着 [PclDialogHost]），
     // 这里只画 `MyMsg*` 的视觉外框，**不能**再套一层 AniHost —— 套两层等于把 Y/旋转变换叠加两遍。
+    // 【为什么要有高度上限】弹窗窗口是整屏，内容（尤其带长正文的确认框）可能比屏幕还高：
+    // 以前 Column 直接 wrap 到底，超出的部分连同**按钮行**一起被裁在窗口外面 ——
+    // 低缩放/小屏上就是「按钮显示不全、点不到」。现在把面板夹到可用高度以内，
+    // 正文区自己滚动，按钮行永远留在底部。
+    BoxWithConstraints(contentAlignment = Alignment.Center) {
+    val panelMaxHeight = maxHeight - PclDimens.msgMargin * 2
     Box(
         modifier = modifier
             .padding(PclDimens.msgMargin)
             .widthIn(max = PclDimens.msgMaxWidth)
+            .heightIn(max = panelMaxHeight)
             // DropShadowEffect Color=ColorObject1 BlurRadius=20 ShadowDepth=4 Opacity=0.8
             // 装了主题就不再画这条 PCL 原生投影 —— 阴影归主题管（终端风、扁平风都要能关掉它）。
             .then(
@@ -393,7 +401,16 @@ private fun PclMsgFrame(
             Spacer(Modifier.height(PclDimens.msgLineGap))
 
             // Row3：正文（各对话框自己决定内容）
-            content()
+            //
+            // `weight(1f, fill = false)`：正文短的时候只占自己需要的高度（弹窗保持紧凑），
+            // 长的时候吃掉标题与按钮之间的剩余空间，再由 `verticalScroll` 滚 —— 按钮不会被顶出去。
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                content()
+            }
 
             // Row4：PanBtn —— 右对齐、Margin="150,0,8,0"、按钮间距 12
             Row(
@@ -403,6 +420,7 @@ private fun PclMsgFrame(
                 content = buttons,
             )
         }
+    }
     }
 }
 

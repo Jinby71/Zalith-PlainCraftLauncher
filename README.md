@@ -155,7 +155,7 @@ export JAVA_HOME=/path/to/jdk17
 
 | 路径 | 内容 |
 |---|---|
-| `ZalithLauncher/` | 启动器主模块 |
+| `ZalithLauncher/` | 启动器主模块（Gradle 模块名沿用上游，**只是路径**；程序显示名与标识不含上游名） |
 | `…/ui/pcl2/` | PCL2 界面：外壳、左栏、各版块页面 |
 | `…/ui/pcl2/components/` | PCL 控件库（按钮、列表项、卡片、弹窗、下拉） |
 | `…/game/` | 下载、启动、渲染器、插件管理 |

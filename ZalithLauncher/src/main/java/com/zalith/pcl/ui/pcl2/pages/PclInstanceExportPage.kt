@@ -144,13 +144,28 @@ private fun likeToRegex(pattern: String): Regex {
             '*' -> sb.append(".*")
             '?' -> sb.append('.')
             '#' -> sb.append("[0-9]")
+            // 【血泪】`[` 的处理必须兜住两种情况，否则用户目录里一个带方括号的文件夹名
+            // （比如 `[宝]`）就能把启动器打崩：
+            //   ① 没有配对的 `]` —— 当普通字符；
+            //   ② 配对但**中间是空的** `[]` —— Java 正则里是非法字符类，直接
+            //      `PatternSyntaxException: Missing closing bracket in character class`。
+            // 以前 ② 会原样拼成 `[]` 丢给 Regex()，于是「选导出 → 崩溃」。
             '[' -> {
                 val end = pattern.indexOf(']', i + 1)
                 if (end < 0) {
                     sb.append("\\[")
+                } else if (end == i + 1) {
+                    // 空字符类：VB Like 里表示「匹配不到任何东西」，正则里用 (?!) 表达
+                    sb.append("(?!)")
+                    i = end
                 } else {
                     var body = pattern.substring(i + 1, end)
                     if (body.startsWith("!")) body = "^" + body.substring(1)
+                    // 类内的正则元字符（除了表示范围的 `-` 和取反的 `^`）都要转义，
+                    // 否则 `[a]b` 这种内容会被当成范围/嵌套而编译失败
+                    body = body.replace("\\", "\\\\")
+                        .replace("[", "\\[")
+                        .replace("]", "\\]")
                     sb.append('[').append(body).append(']')
                     i = end
                 }
@@ -162,12 +177,21 @@ private fun likeToRegex(pattern: String): Regex {
         }
         i++
     }
-    return Regex(sb.toString(), RegexOption.IGNORE_CASE)
+    // 兜底：规则来自磁盘上的名字，用户能起出任何字符。真编不出来就退回「整串当字面量」，
+    // 结果最多是这条规则匹配不上，绝不能抛到界面线程上变成崩溃。
+    val source = sb.toString()
+    return runCatching { Regex(source, RegexOption.IGNORE_CASE) }
+        .getOrElse { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
 }
 
 private val likeRegexCache = HashMap<String, Regex>()
 
-private fun likeRegex(pattern: String): Regex = likeRegexCache.getOrPut(pattern) { likeToRegex(pattern) }
+private fun likeRegex(pattern: String): Regex {
+    // 规则来自目录结构，导出大型整合包能上千条；超过阈值就整表丢掉重来，
+    // 避免一个常驻的 HashMap 随着反复导出无限长。
+    if (likeRegexCache.size > 4096) likeRegexCache.clear()
+    return likeRegexCache.getOrPut(pattern) { likeToRegex(pattern) }
+}
 
 /**
  * PCL 的 `StandardizeLines`：去空格、跳过空行与 `#` / `=` 注释行、

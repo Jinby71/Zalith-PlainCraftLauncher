@@ -198,17 +198,10 @@ export JAVA_HOME=/path/to/jdk17
 
 ## 许可与致谢
 
-本项目遵循 **[GPL-3.0](LICENSE)**。依据 GPLv3 第 7 条的附加条款（继承自上游）：
+本项目遵循 **[GPL-3.0](LICENSE)**。上游在 GPLv3 第 7 条下附有名称与标注要求，本仓库已照办：
+名称不使用上游原名及缩写，启动页与关于页标注「非官方修改版」。
 
-1. 分发修改版本时必须以合理方式修改名称或版本号，以示与原始版本不同
-   （[7(c)](https://github.com/ZalithLauncher/ZalithLauncher2/blob/969827b/LICENSE#L372-L374)）
-   - 名称中不得包含 `ZalithLauncher` 或缩写 `ZL`，也不得使用可能造成混淆的近似名称
-   - 必须在启动页或主界面显著标注「非官方修改版」
-   - 应用名称在 [`ZalithLauncher/gradle.properties`](ZalithLauncher/gradle.properties) 的 `launcher_app_name` 中配置
-2. 不得移除程序显示的版权声明
-   （[7(b)](https://github.com/ZalithLauncher/ZalithLauncher2/blob/969827b/LICENSE#L368-L370)）
-
-完整许可、修改声明与署名见 **[NOTICE.md](NOTICE.md)**；第三方组件与许可见
+修改声明、名称处理、源码获取与署名见 **[NOTICE.md](NOTICE.md)**；第三方组件与许可见
 **[docs/THIRD_PARTY.md](docs/THIRD_PARTY.md)**。
 
 `Zalith Launcher` / `PCL2` 的名称与标识归各自作者所有；本项目只在「基于谁」的意义上提及它们，

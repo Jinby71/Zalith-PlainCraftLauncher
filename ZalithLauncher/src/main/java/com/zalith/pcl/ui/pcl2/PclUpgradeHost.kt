@@ -31,6 +31,7 @@ import com.zalith.pcl.ui.pcl2.components.PclUpgradeDialog
 import com.zalith.pcl.ui.pcl2.components.PclUpgradeDownloadDialog
 import com.zalith.pcl.ui.pcl2.components.PclUpgradeFilesDialog
 import com.zalith.pcl.ui.pcl2.components.pclMarkdownToPlain
+import com.zalith.pcl.ui.pcl2.data.PclRemoteContent
 import com.zalith.pcl.ui.pcl2.data.PclUpdateSources
 import com.zalith.pcl.upgrade.RemoteData
 import com.zalith.pcl.upgrade.findCurrentBody
@@ -140,6 +141,13 @@ fun PclUpgradeHost() {
                     if (upgradeViewModel.operation === operation) {
                         upgradeViewModel.operation = LauncherUpgradeOperation.None
                     }
+                },
+                // 官网分流入口：常驻，不看网盘配置。GitHub 直连慢的时候这是最省事的一条路。
+                siteButtonText = "从官网下载（若下载缓慢）",
+                onSiteButton = {
+                    upgradeViewModel.operation = LauncherUpgradeOperation.None
+                    val base = runCatching { PclRemoteContent.baseUrl() }.getOrDefault("")
+                    if (base.isNotBlank()) openLink(context, base.trimEnd('/'))
                 },
                 cloudButtonText = cloudDrive?.name,
                 // 「立即更新」是直接装；网盘是给下不动 / 想留一份的人的备选入口，

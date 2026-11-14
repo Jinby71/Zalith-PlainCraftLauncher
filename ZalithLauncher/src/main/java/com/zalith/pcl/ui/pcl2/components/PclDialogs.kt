@@ -27,6 +27,7 @@ package com.zalith.pcl.ui.pcl2.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1055,6 +1057,15 @@ fun PclUpgradeDialog(
     onLater: () -> Unit,
     cloudButtonText: String? = null,
     onCloudButton: (() -> Unit)? = null,
+    /**
+     * 正文顶部那行「从官网下载（若下载缓慢）」。
+     *
+     * 国内直连 GitHub 更新包经常几百 KB/s 甚至断流，官网有分流好的整包。
+     * 这行常驻、不依赖网盘配置（[cloudButtonText] 要官网后台配了才出现），
+     * 位置放在版本号下面第一行 —— 不用滚就能看见。
+     */
+    siteButtonText: String? = null,
+    onSiteButton: (() -> Unit)? = null,
 ) {
     val p = pclPalette
     val cloudText = cloudButtonText?.takeIf { it.isNotBlank() && onCloudButton != null }
@@ -1123,6 +1134,33 @@ fun PclUpgradeDialog(
                         color = p.color2,
                     ),
                 )
+                val siteText = siteButtonText?.takeIf { it.isNotBlank() && onSiteButton != null }
+                if (siteText != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            onSiteButton?.invoke()
+                            requestClose()
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = siteText,
+                            style = PclTextStyle.base(p).copy(
+                                fontSize = PclDimens.msgBodyFontSize.sp,
+                                color = p.color2,
+                            ),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "›",
+                            style = PclTextStyle.base(p).copy(
+                                fontSize = PclDimens.msgBodyFontSize.sp,
+                                color = p.color2,
+                            ),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = bodyText,

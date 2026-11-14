@@ -1426,7 +1426,7 @@ fun PclSetupSystemPage() {
                     theme = PclHintTheme.Blue,
                 )
                 PclHint(
-                    text = "同时下载的文件数，默认 8（PCL2 同款滑条）。网络差或设备较慢时调小，"
+                    text = "同时下载的文件数，默认 32（PCL2 同款滑条）。网络差或设备较慢时调小，"
                             + "能减少超时和失败重试；网络快、机器好可以调大。改完下一次下载生效。",
                     theme = PclHintTheme.Blue,
                 )

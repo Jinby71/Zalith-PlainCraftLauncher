@@ -524,11 +524,29 @@ object AllSettings : SettingsRegistry() {
     /**
      * 下载的最大线程数（同时下载的文件数）。
      *
-     * 对应 PCL2「设置 → 下载 → 最大线程数」的滑条，默认 8。调小能明显减少
+     * 对应 PCL2「设置 → 下载 → 最大线程数」的滑条，默认 **32**。调小能明显减少
      * 弱网/慢存储下的超时与失败重试，调大更适合带宽充足的网络。
      * 各下载器统一读 [com.zalith.pcl.game.version.download.currentDownloadThreads]。
      */
-    val downloadThreads = intSetting("downloadThreads", 16, 1..128)
+    val downloadThreads = intSetting("downloadThreads", 32, 1..128)
+
+    /**
+     * 老用户的默认值迁移：把「还停在旧默认 16」的那批人一起抬到 32。
+     *
+     * 只改仍等于旧默认值的存档；手动调过的（8、64…）一律不动 —— 那是用户自己的选择。
+     * 用独立开关记一笔，迁移只做一次，之后用户再把滑条拖回 16 也不会被悄悄改掉。
+     */
+    private val threadsDefault32Migrated = boolSetting("threadsDefault32Migrated", false)
+
+    init {
+        runCatching {
+            if (!threadsDefault32Migrated.getValue()) {
+                val stored = launcherMMKV().getInt("downloadThreads", -1)
+                if (stored == 16) launcherMMKV().putInt("downloadThreads", 32)
+                threadsDefault32Migrated.save(true)
+            }
+        }
+    }
 
     //Control
     /**

@@ -668,14 +668,17 @@ object AllSettings : SettingsRegistry() {
     val showSponsorship = boolSetting("showSponsorship", true)
 
     /**
-     * 搜索模组的初始搜索平台
+     * 搜索模组的初始搜索平台。
+     *
+     * 默认 Modrinth：官方 CurseForge 接口要 `x-api-key`，本构建没配（见 `BuildKeys.CURSEFORGE_API`），
+     * 一进去就是 403；Modrinth 免密钥、国内也通。用户仍可在设置里改回 CurseForge。
      */
-    val searchModPlatform = enumSetting("searchModPlatform", Platform.CURSEFORGE)
+    val searchModPlatform = enumSetting("searchModPlatform", Platform.MODRINTH)
 
     /**
-     * 搜索整合包的初始搜索平台
+     * 搜索整合包的初始搜索平台。默认 Modrinth，理由同上。
      */
-    val searchModpackPlatform = enumSetting("searchModpackPlatform", Platform.CURSEFORGE)
+    val searchModpackPlatform = enumSetting("searchModpackPlatform", Platform.MODRINTH)
 
     /**
      * 搜索资源包的初始搜索平台

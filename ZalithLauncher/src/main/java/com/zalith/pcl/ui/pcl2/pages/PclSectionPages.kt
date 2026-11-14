@@ -1846,10 +1846,10 @@ private class PclAssetPage(
  * 返回时自然接上原来的搜索现场。结果页（[PclAssetPage]）也一起缓存，
  * 返回后不必再发一次请求，直接显示上次那一页。
  */
-private class PclAssetSearchSlot {
+private class PclAssetSearchSlot(defaultSource: Platform? = null) {
     // 直接用 `MutableState` 而不是 `by mutableStateOf`：调用点要 `var x by slot.x` 委托到它，
     // 委托目标必须是 `MutableState<T>` 本身，不能是已经拆包出来的 `T`。
-    val source = mutableStateOf<Platform?>(null)
+    val source = mutableStateOf<Platform?>(defaultSource)
     val keyword = mutableStateOf("")
     val gameVersion = mutableStateOf<String?>(null)
     val tag = mutableStateOf<PlatformFilterCode?>(null)
@@ -1872,10 +1872,23 @@ private class PclAssetSearchSlot {
     var refreshTokenSeen: Int = -1
 }
 
+/**
+ * 各分栏「来源」下拉的初始值。
+ *
+ * 模组、整合包默认 Modrinth：官方 CurseForge 接口要 `x-api-key`，本构建没配（见
+ * `BuildKeys.CURSEFORGE_API`），选「CurseForge」或「全部」都只能拿到半份结果。
+ * 存档 / 资源包 / 光影包保持「全部」—— 这几个 CurseForge 侧不依赖那个 key。
+ */
+private fun pclDefaultSource(section: Int): Platform? = when (section) {
+    1, 2 -> Platform.MODRINTH
+    else -> null
+}
+
 private object PclAssetSearchMemory {
     private val slots = HashMap<Int, PclAssetSearchSlot>()
 
-    fun of(section: Int): PclAssetSearchSlot = slots.getOrPut(section) { PclAssetSearchSlot() }
+    fun of(section: Int): PclAssetSearchSlot =
+        slots.getOrPut(section) { PclAssetSearchSlot(pclDefaultSource(section)) }
 }
 
 /** 对单个平台执行一次搜索并把结果包成 [Result]（`searchAssets` 是回调式接口）。 */

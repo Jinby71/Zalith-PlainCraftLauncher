@@ -2,8 +2,8 @@
 
 本仓库是 **Zalith Launcher 2** 的修改版，按 GNU 通用公共许可证第 3 版（GPLv3）分发。
 
-- **本版本名称**：Pixelforge Launcher
-- **本版本版本号**：1.5.2（versionCode 200074）
+- **本版本名称**：ZPCL Launcher
+- **本版本版本号**：1.5.3（versionCode 200075）
 - **上游项目**：Zalith Launcher 2 — <https://github.com/ZalithLauncher/ZalithLauncher2>
 - **上游版权**：Copyright (C) 2025 MovTery <movtery228@qq.com> and contributors
 - **本仓库**：<https://github.com/zuanxu53-hub/Zalith-PlainCraftLauncher>
@@ -31,7 +31,7 @@
 
 1. 修改版的名称**不得包含** `ZalithLauncher` 或其缩写 `ZL`，也不得使用与官方名称相近、可能引起混淆的名称。
    - 本版本原名 `Zalith-Plain Craft Launcher`、短名 `ZL2` **不符合**该条款，已于 2026-11 改名为
-     **Pixelforge Launcher**（短名 `Pixelforge`）。
+     **ZPCL Launcher**（短名 `ZPCL`）。
 2. 必须在**启动页或主界面以明显方式**标注「非官方修改版」。
    - 已在原生启动页、PCL 解压页顶栏、设置 → 关于页三处标注：
      「非官方修改版 · 与 Zalith Launcher 官方无关」。

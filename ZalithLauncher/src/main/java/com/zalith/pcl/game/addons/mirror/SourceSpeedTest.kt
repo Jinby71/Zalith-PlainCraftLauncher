@@ -1,5 +1,5 @@
 /*
- * Pixelforge Launcher —— Zalith Launcher 2 的修改版（非官方）。
+ * ZPCL Launcher —— Zalith Launcher 2 的修改版（非官方）。
  * 上游版权：Copyright (C) 2025 MovTery <movtery228@qq.com> and contributors
  * 本文件自 2026 年起被修改；修改声明与名称/标识的处理见仓库根目录 NOTICE.md。
  *
@@ -91,7 +91,7 @@ suspend fun measureSourceSpeed(type: SourceType): SourceSpeedResult = withContex
             readTimeout = PROBE_TIMEOUT_MS
             requestMethod = "GET"
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Pixelforge")
+            setRequestProperty("User-Agent", "ZPCL")
         }
         val start = System.currentTimeMillis()
         connection.connect()

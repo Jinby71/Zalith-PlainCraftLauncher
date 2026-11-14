@@ -1,4 +1,4 @@
-# Pixelforge Launcher
+# ZPCL Launcher
 
 面向 **Android 设备** 的 [Minecraft: Java Edition](https://www.minecraft.net/) 启动器。
 
@@ -7,7 +7,7 @@
 [Plain Craft Launcher 2](https://github.com/Hex-Dragon/PCL2)（下称 PCL2）的版式与交互重做，
 使用 **Jetpack Compose** 编写。
 
-> 当前版本：**1.5.2（versionCode 200074）**
+> 当前版本：**1.5.3（versionCode 200075）**
 > 本项目是 Zalith Launcher 2 的**非官方修改版**，与上游官方无关联。
 > 依 GPLv3 第 7 条附加条款，名称中不含上游原名 `ZalithLauncher` 及其缩写 `ZL`，
 > 并在启动页与关于页标注「非官方修改版」。
@@ -179,7 +179,7 @@ export JAVA_HOME=/path/to/jdk17
 2. 同步改 `latest_version_md.json` 的 `version` / `code`，并在 `default_body` 里写这一版的说明
    （应用内「检查更新」读的就是它）
 3. 在 `release/<版本>.md` 记一份同源说明，便于回看
-4. 需要打标签时：`git tag -a v<版本> -m "Pixelforge Launcher <版本>" && git push origin main --tags`
+4. 需要打标签时：`git tag -a v<版本> -m "ZPCL Launcher <版本>" && git push origin main --tags`
    —— 标签只标记源码节点，不触发任何上传安装包的流水线
 
 `launcher_name` 与 `CLIENT_TOKEN_SEED` 属于登录与数据目录的标识，**不要修改**。

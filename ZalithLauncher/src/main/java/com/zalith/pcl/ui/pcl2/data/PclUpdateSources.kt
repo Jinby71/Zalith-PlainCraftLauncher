@@ -1,5 +1,5 @@
 /*
- * Pixelforge Launcher —— Zalith Launcher 2 的修改版（非官方）。
+ * ZPCL Launcher —— Zalith Launcher 2 的修改版（非官方）。
  * 上游版权：Copyright (C) 2025 MovTery <movtery228@qq.com> and contributors
  * 本文件自 2026 年起被修改；修改声明与名称/标识的处理见仓库根目录 NOTICE.md。
  *
@@ -116,7 +116,7 @@ object PclUpdateSources {
             conn = URL("$base/api/downloads").openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
-            conn.setRequestProperty("User-Agent", "Pixelforge/2")
+            conn.setRequestProperty("User-Agent", "ZPCL/2")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code != HttpURLConnection.HTTP_OK) {

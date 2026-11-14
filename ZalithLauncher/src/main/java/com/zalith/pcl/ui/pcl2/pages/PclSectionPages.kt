@@ -2531,9 +2531,16 @@ internal fun startModpackImport(
     val title = "安装整合包：${version.platformDisplayName()}"
     // 专用目录，与 `temp_modpack` 平级 —— 导入器清缓存时不会波及这里。
     val outDir = File(PathManager.DIR_CACHE, "pcl2_modpack_import").apply { mkdirs() }
-    val output = File(outDir, version.platformFileName())
-    // 上一次没清理干净的残留（比如进程被杀），先删掉，免得下载引擎发现同名文件而跳过。
-    runCatching { if (output.isFile) output.delete() }
+    // 【每次尝试用独立文件名】不能固定用 `platformFileName()`：
+    // 这条链的 onFinished / onCancelled / onError 三个回调里都会 `output.delete()`，
+    // 而它们可能**在用户重试之后**才跑到（取消是 job.cancel()，回调不保证立刻停）。
+    // 共用同一个路径时，晚到的旧回调会把这次刚下好的包删掉 ——
+    // 表现就是「进度 100% → 立刻报 ENOENT: No such file or directory」。
+    // 带上时间戳后，旧回调只能删掉它自己那份。
+    val baseName = version.platformFileName()
+    val stem = baseName.substringBeforeLast('.', baseName)
+    val ext = baseName.substringAfterLast('.', "").let { if (it.isBlank()) "" else ".$it" }
+    val output = File(outDir, "$stem-${System.currentTimeMillis()}$ext")
     // 顺手扫掉这个目录里过期的旧包：导入中途被取消的那条路走不到下面的删除。
     // 只删一小时前的，避免误伤另一个正在进行中的导入。
     val staleCutoff = System.currentTimeMillis() - 60L * 60L * 1000L
@@ -2593,6 +2600,16 @@ internal fun startModpackImport(
                 }
                 return@submitTask
             }
+            // 先确认包真的还在：缓存被系统清掉、或上面的竞态删掉了，都会在这里暴露。
+            // 直接交给导入器只会抛一个 `FileNotFoundException` 给用户看，没人看得懂。
+            if (!output.isFile || output.length() <= 0L) {
+                runtime.clearModpackImport(importId)
+                runtime.submitErrorText(
+                    "整合包导入失败",
+                    "下载好的整合包不见了（可能被系统清理了缓存），请重新安装一次。",
+                )
+                return@submitTask
+            }
             // 包已经落地，接下来直接交给导入器，不需要用户再点任何东西。
             // 这条提示同时也是「下载完会自动装」的可见凭据 —— 用户切到别的版块时也能看到。
             PclHintHost.push("整合包下载完成，开始自动安装。", PclHintTheme.Blue)
@@ -2648,7 +2665,9 @@ internal fun startModpackImport(
                                 if (pclDiscardIncompleteVersion(importer.resolvedVersionNameOrNull())) {
                                     runtime.refreshVersions()
                                 }
-                                runCatching { output.delete() }
+                                // 这里**不删包**：取消只是 `job.cancel()`，导入器可能还停在下一次
+                                // 调度点之前，读文件的那一步随时可能落到这个路径上。删了就是 ENOENT。
+                                // 交给 `startModpackImport` 里「一小时前的旧包」那段清理收尾。
                             },
                             onError = { th ->
                                 onImporter(null)
@@ -2664,7 +2683,8 @@ internal fun startModpackImport(
                                     }
                                     runtime.submitErrorText("整合包导入失败", modpackImportErrorText(th))
                                 }
-                                runCatching { output.delete() }
+                                // 失败时同样不删：错误本身可能就是「文件读不到」，
+                                // 删掉只会把可复现的线索一起毁掉。旧包由一小时清理兜底。
                             },
                         )
                         // 守住锁直到这条从任务表里消失（装完 / 失败 / 被取消都会清）——

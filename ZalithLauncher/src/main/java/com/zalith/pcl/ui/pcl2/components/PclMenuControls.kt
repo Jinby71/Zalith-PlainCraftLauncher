@@ -21,6 +21,7 @@ package com.zalith.pcl.ui.pcl2.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -136,11 +137,16 @@ fun PclMenuSurface(
     val shape = RoundedCornerShape(radius)
     val valid = enabled && onClick != null
     // MyListItem.xaml.vb:584/620 —— 指向浮层：底色 ColorBg1（ColorBrush7 @ alpha 190）+ 1px ColorBrush6 边框
+    // 指向底色：进入 60ms、离开 0ms —— 离开慢会把「划过的那几行」留住，
+    // 鼠标一快就是拖尾/闪烁（同 `PclListItem` 里的说明）。
     val background = animatePclColor(
         if (active && valid) p.color7.copy(alpha = 190f / 255f) else Color.Transparent,
-        120,
+        if (active && valid) 60 else 0,
     )
-    val borderColor = animatePclColor(if (active && valid) p.color6 else Color.Transparent, 120)
+    val borderColor = animatePclColor(
+        if (active && valid) p.color6 else Color.Transparent,
+        if (active && valid) 60 else 0,
+    )
     val barHeight by animateDpAsState(
         targetValue = if (leadingBar && enabled) 30.dp else 0.dp,
         animationSpec = tween(300),
@@ -554,7 +560,7 @@ fun PclMenuTabRow(
             )
             val background = animatePclColor(
                 if (active && !selected) p.color7.copy(alpha = 190f / 255f) else Color.Transparent,
-                120,
+                if (active) 60 else 0,
             )
 
             Box(
@@ -817,6 +823,7 @@ internal fun rememberPclInteraction(): Pair<MutableInteractionSource, Boolean> {
 internal fun animatePclColor(target: Color, durationMillis: Int = 100): Color =
     animateColorAsState(
         targetValue = target,
-        animationSpec = tween(durationMillis),
+        // `<= 0` = 立刻切过去（指向高亮退出用），走 `snap()` 避免 `tween(0)` 的除零分支
+        animationSpec = if (durationMillis <= 0) snap() else tween(durationMillis),
         label = "pclMenuColor",
     ).value

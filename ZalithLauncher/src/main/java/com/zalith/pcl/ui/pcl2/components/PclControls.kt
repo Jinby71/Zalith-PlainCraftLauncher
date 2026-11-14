@@ -27,6 +27,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -186,7 +187,13 @@ private fun pclColorSpec(durationMillis: Int): TweenSpec<Color> =
 
 @Composable
 private fun animateTo(target: Color, durationMillis: Int = 100): Color =
-    animateColorAsState(targetValue = target, animationSpec = pclColorSpec(durationMillis), label = "pclColor").value
+    animateColorAsState(
+        targetValue = target,
+        // `durationMillis <= 0` 表示「立刻切过去」。用 `snap()` 而不是 `tween(0)`：
+        // 0 毫秒的 tween 在部分 Compose 版本里会走除零分支，`snap()` 是明确的瞬时语义。
+        animationSpec = if (durationMillis <= 0) snap() else pclColorSpec(durationMillis),
+        label = "pclColor",
+    ).value
 
 /* ============================================================================
  *  PCL 原式动效（缓动全部走 `PclEase`，即 `ModAnimation.vb` 的 `AniEase*` 公式）
@@ -906,10 +913,16 @@ fun PclCard(
         onToggle?.invoke(next)
     }
 
-    val shadowColor = animateTo(if (active && hasMouseAnimation) p.color4 else p.color1, 90)
+    // 卡片指向阴影同样是「进入 90ms、离开 0ms」：阴影退得慢，鼠标扫过一排卡片时
+    // 身后会拖着一串还没恢复的深色卡片，叠在行高亮上更像在乱跳。
+    val cardHover = active && hasMouseAnimation
+    val shadowColor = animateTo(
+        if (cardHover) p.color4 else p.color1,
+        if (cardHover) 90 else 0,
+    )
     val shadowAlpha by animateFloatAsState(
-        targetValue = if (active && hasMouseAnimation) 0.40f else 0.07f,
-        animationSpec = tween(90),
+        targetValue = if (cardHover) 0.40f else 0.07f,
+        animationSpec = if (cardHover) tween(90) else snap(),
         label = "pclCardShadow",
     )
     val padding = contentPadding ?: if (title != null) {
@@ -1370,8 +1383,15 @@ fun PclListItem(
     // MyListItem.xaml.vb:584 / :620 / :604 —— RectBack（指向浮层）只在鼠标指向（触屏为按下）时出现：
     //   底色 ColorBg1 = MyColor(190, Color7)，即 ColorBrush7 @ alpha 190/255（**半透明**，不是实色）；
     //   边框 1px ColorBrush6。空闲时 RectBack 的 Background 是 ColorBrush7、Opacity = 0（不可见）。
-    val background = animateTo(if (active) p.color7.copy(alpha = 190f / 255f) else Color.Transparent, 120)
-    val borderColor = animateTo(if (active) p.color6 else Color.Transparent, 120)
+    // 【退出必须瞬时】指向底色的进出都用 120ms 时，鼠标快速划过一列条目会出现
+    // 「前几行还没退干净、后几行已经亮起」的拖尾 —— 看起来就是高亮在行间乱跳、串行闪烁。
+    // PCL 在桌面上指针走得慢，看不出这个问题；手机屏幕小、一滑就跨好几行，就很明显。
+    // 现在：进入 60ms（有过渡，不突兀），离开 0ms（立刻消失），任何时刻只有指针下那一条是深的。
+    val background = animateTo(
+        if (active) p.color7.copy(alpha = 190f / 255f) else Color.Transparent,
+        if (active) 60 else 0,
+    )
+    val borderColor = animateTo(if (active) p.color6 else Color.Transparent, if (active) 60 else 0)
 
     val checkColumnWidth: Dp = when (type) {
         PclListItemType.None, PclListItemType.Clickable -> if (compact) 4.dp else 2.dp
@@ -2513,13 +2533,19 @@ internal fun PclComboBoxItemRow(
     val p = pclPalette
     val (interaction, active) = rememberInteraction()
     // AnimationTimeIn = 100 / AnimationTimeOut = 300
+    // 选中 100ms、指向进入 60ms、离开 0ms：原来离开是 300ms，
+    // 下拉里划过一串选项会留下一整排深色 —— 就是「高亮串行」的来源。
     val background = animateTo(
         when {
             selected -> p.color6
             active -> p.color8
             else -> Color.Transparent
         },
-        if (active || selected) 100 else 300,
+        when {
+            selected -> 100
+            active -> 60
+            else -> 0
+        },
     )
     Row(
         modifier = Modifier

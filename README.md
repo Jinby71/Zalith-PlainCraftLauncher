@@ -7,7 +7,7 @@
 [Plain Craft Launcher 2](https://github.com/Hex-Dragon/PCL2)（下称 PCL2）的版式与交互重做，
 使用 **Jetpack Compose** 编写。
 
-> 当前版本：**1.5.0（versionCode 200072）**
+> 当前版本：**1.5.2（versionCode 200074）**
 > 本项目是 Zalith Launcher 2 的**非官方修改版**，与上游官方无关联。
 > 依 GPLv3 第 7 条附加条款，名称中不含上游原名 `ZalithLauncher` 及其缩写 `ZL`，
 > 并在启动页与关于页标注「非官方修改版」。
@@ -165,17 +165,22 @@ export JAVA_HOME=/path/to/jdk17
 | `release/` | 各版本的发布说明（与应用内更新文案同源） |
 | `latest_version_md.json` | 应用内「检查更新」读取的版本清单 |
 | `CardGrid/` `ColorPicker/` `InputMap/` `LayerController/` `LWJGL/` `Terracotta/` | 渲染、输入、联机等子模块 |
-| `.github/workflows/` | CI：构建、推送检查、发布 |
+| `.github/workflows/` | CI：编译校验与推送检查（不含打包上传） |
 
 ---
 
 ## 版本与发布
 
+本仓库**只承载源代码**，不存放安装包：仓库与 GitHub Releases 都不挂 APK，
+分发包由官网（`url_home` 指向的站点）自行提供。
+
 1. 改 `ZalithLauncher/gradle.properties` 的 `launcher_version_name` / `launcher_version_code`
-   —— **versionCode 必须递增**，否则已安装的设备无法覆盖升级
+   —— **versionCode 必须递增**，否则已安装的设备无法覆盖升级；两条产线都要改
 2. 同步改 `latest_version_md.json` 的 `version` / `code`，并在 `default_body` 里写这一版的说明
-3. 两条产线各出一次包，登记到 `release/<版本>.md`
-4. 打 tag 并建 GitHub Release —— `release_ci.yml` 监听的是 **release published**，只推 tag 不会触发构建
+   （应用内「检查更新」读的就是它）
+3. 在 `release/<版本>.md` 记一份同源说明，便于回看
+4. 需要打标签时：`git tag -a v<版本> -m "Pixelforge Launcher <版本>" && git push origin main --tags`
+   —— 标签只标记源码节点，不触发任何上传安装包的流水线
 
 `launcher_name` 与 `CLIENT_TOKEN_SEED` 属于登录与数据目录的标识，**不要修改**。
 

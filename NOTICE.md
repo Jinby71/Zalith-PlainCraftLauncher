@@ -3,6 +3,7 @@
 本仓库是 **Zalith Launcher 2** 的修改版，按 GNU 通用公共许可证第 3 版（GPLv3）分发。
 
 - **本版本名称**：Pixelforge Launcher
+- **本版本版本号**：1.5.2（versionCode 200074）
 - **上游项目**：Zalith Launcher 2 — <https://github.com/ZalithLauncher/ZalithLauncher2>
 - **上游版权**：Copyright (C) 2025 MovTery <movtery228@qq.com> and contributors
 - **本仓库**：<https://github.com/zuanxu53-hub/Zalith-PlainCraftLauncher>
@@ -38,10 +39,11 @@
 
 ## 三、源代码（GPLv3 §6）
 
-本仓库即对应源代码，与发布的 APK 同源同版本。通过 GitHub Releases 分发安装包时，
-Release 说明中会给出本仓库地址；任何拿到安装包的人都可以从同一位置取得完整源码。
+本仓库即对应源代码，与对外分发的安装包同源同版本；构建方法见 [README](README.md#构建)。
 
-构建方法与版本对应关系见 [README](README.md#构建)。
+本仓库**不存放安装包**（仓库与 Releases 均不含 APK），分发的 APK 由本项目官网提供。
+即便如此，GPLv3 §6 要求的「对应源代码」始终可以从本仓库完整取得：任何拿到安装包的人，
+都能在 <https://github.com/zuanxu53-hub/Zalith-PlainCraftLauncher> 取得同一版本的源码。
 
 ## 四、第三方组件
 

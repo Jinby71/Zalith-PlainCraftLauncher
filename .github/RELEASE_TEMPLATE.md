@@ -1,62 +1,64 @@
-# 正式版发布模板
+# 发布流程（只发源码，不发安装包）
 
-发布一个正式版时，按下面四步走。把 `1.4.6` / `200063` 换成当次的版本号与 versionCode。
+本仓库只承载源代码：**不建带 APK 附件的 GitHub Release，也不在仓库里放安装包**。
+分发的 APK 由官网（`url_home` 指向的站点）提供；源码始终可以从本仓库取得。
+
+下面把 `1.5.2` / `200074` 换成当次的版本号与 versionCode。
 
 ---
 
-## 1. 打标签
+## 1. 改版本号
 
-```bash
-cd D:/workpls/Zalith-PlainCraftLauncher
-git tag -a v1.4.6 -m "Zalith-Plain Craft Launcher 1.4.6 (200063)"
-git push origin main --tags
-```
+| 位置 | 字段 |
+|---|---|
+| `ZalithLauncher/gradle.properties` | `launcher_version_code` / `launcher_version_name` |
+| `Zalith-PlainCraftLauncher-Release/ZalithLauncher/gradle.properties` | 同上（两条产线都要改） |
+| `latest_version_md.json` | `code` / `version` / `default_body` / `bodies` |
 
-> `release_ci.yml` 监听的是 **release published**，不是 tag。只推 tag 不会触发构建，第 3 步发布才会。
+versionCode 只增不减；`launcher_name` 与 `CLIENT_TOKEN_SEED` 不要动。
 
-## 2. 准备正文
+## 2. 写说明
 
-正文直接用仓库里的 `release/<版本>.md`（由 `latest_version_md.json` 的 `default_body.markdown` 生成，
-与应用内「检查更新」显示的说明保持一致）。没有就先生成：
+正文以 `latest_version_md.json` 的 `default_body.markdown` 为准（应用内「检查更新」显示的就是它），
+再生成一份同源归档到 `release/<版本>.md`：
 
 ```bash
 python - <<'PY'
 import io, json
 d = json.load(io.open("latest_version_md.json", encoding="utf-8"))
 body = (d.get("default_body") or {}).get("markdown", "").strip()
-head = f"# {d['version']}\n\n**Version code** `{d['code']}`  ·  **Package** `com.zalith.pcl`\n\n---\n\n"
-io.open(f"release/{d['version']}.md", "w", encoding="utf-8", newline="\n").write(head + body + "\n")
+head = ("# {v}\n\n**versionCode** `{c}` · **包名** `com.zalith.pcl` · **minSdk** 26 · **targetSdk** 34\n"
+        "**名称** Pixelforge Launcher · **非官方修改版，与 Zalith Launcher 官方无关联**\n\n---\n\n").format(
+    v=d["version"], c=d["code"])
+io.open("release/%s.md" % d["version"], "w", encoding="utf-8", newline="\n").write(head + body + "\n")
 PY
 ```
 
-## 3. 建 Release（草稿 → 审核 → 发布）
+## 3. 提交并推源码
 
 ```bash
-gh release create v1.4.6 \
-  --draft \
-  --title "1.4.6" \
-  --notes-file release/1.4.6.md \
-  outputs/z-pcl-1.4.6-plugin-upgrade/ZalithLauncher-1.4.6-arm64-v8a-release.apk
+git add -A
+git commit -m "1.5.2：<一句话说明>"
+git -c http.sslBackend=schannel -c http.schannelCheckRevoke=false -c http.schannelUseSSLCAInfo=false push origin main
 ```
 
-- `--draft`：先存草稿，附件已挂好，点 Publish 才会触发 CI 重编并补传全部 ABI。
-- 附件至少要挂 **release 版** 的 APK；CI 会把 `apks/*.apk` 全量补上（`fail_on_unmatched_files: true`，别让它找不到文件）。
+## 4. 打标签（可选，只标记源码节点）
 
-## 4. 发布后核对
+```bash
+git tag -a v1.5.2 -m "Pixelforge Launcher 1.5.2 (200074)"
+git push origin v1.5.2
+```
 
-| 检查 | 期望 |
-|---|---|
-| Release 附件 | 至少一个 `ZalithLauncher-<版本>-*.apk` |
-| 应用内检查更新 | 读到 `latest_version_md.json` 的 `code` / `version` |
-| 标签 | `v1.4.6` 指向发布所用提交 |
-| 签名 | 与 `zalith_release.jks` 一致（包名 `com.zalith.pcl`） |
+标签不会触发任何打包上传：仓库里没有 `release` 事件的工作流（`release_ci.yml` 已移除）。
 
 ---
 
-## 每版必须同步的三处
+## 发布后核对
 
-1. `ZalithLauncher/gradle.properties`（`launcher_version_code` / `launcher_version_name`）
-2. `Zalith-PlainCraftLauncher-Release/` 同名字段
-3. `latest_version_md.json`（两条线各一份）
-
-versionCode 只增不减；`launcher_name` 与 `CLIENT_TOKEN_SEED` 不要动。
+| 检查 | 期望 |
+|---|---|
+| 仓库 Releases | 没有带 APK 的发布项 |
+| 仓库根目录 | 没有 `*.apk` |
+| 应用内检查更新 | 读到 `latest_version_md.json` 的 `code` / `version` |
+| 关于页 | 显示 Pixelforge Launcher 1.5.2 与「非官方修改版」标注 |
+| 源码入口 | 关于页可打开本仓库 |

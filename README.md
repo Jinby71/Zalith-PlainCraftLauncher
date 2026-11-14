@@ -12,6 +12,9 @@
 > 依 GPLv3 第 7 条附加条款，名称中不含上游原名 `ZalithLauncher` 及其缩写 `ZL`，
 > 并在启动页与关于页标注「非官方修改版」。
 
+修改声明、与上游的边界、名称与标识的处理、问题该提给谁，都写在 **[NOTICE.md](NOTICE.md)**。
+本文件只讲这个启动器本身。
+
 ---
 
 ## 目录
@@ -200,7 +203,11 @@ export JAVA_HOME=/path/to/jdk17
 2. 不得移除程序显示的版权声明
    （[7(b)](https://github.com/ZalithLauncher/ZalithLauncher2/blob/969827b/LICENSE#L368-L370)）
 
-第三方组件与许可见 **[docs/THIRD_PARTY.md](docs/THIRD_PARTY.md)**。
+完整许可、修改声明与署名见 **[NOTICE.md](NOTICE.md)**；第三方组件与许可见
+**[docs/THIRD_PARTY.md](docs/THIRD_PARTY.md)**。
+
+`Zalith Launcher` / `PCL2` 的名称与标识归各自作者所有；本项目只在「基于谁」的意义上提及它们，
+不用作自身名称，也不声称与其有关联。
 
 感谢 [Zalith Launcher 2](https://github.com/ZalithLauncher/ZalithLauncher2)、
 [PojavLauncher](https://github.com/PojavLauncherTeam/PojavLauncher)、

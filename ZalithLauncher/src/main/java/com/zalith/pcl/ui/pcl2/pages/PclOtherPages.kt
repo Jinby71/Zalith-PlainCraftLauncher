@@ -1,4 +1,13 @@
 /*
+ * Pixelforge Launcher —— Zalith Launcher 2 的修改版（非官方）。
+ * 上游版权：Copyright (C) 2025 MovTery <movtery228@qq.com> and contributors
+ * 本文件自 2026 年起被修改；修改声明与名称/标识的处理见仓库根目录 NOTICE.md。
+ *
+ * 本程序为自由软件：你可以依据 GNU 通用公共许可证第 3 版（或更高版本）重新发布
+ * 和/或修改它。分发时请保留本声明、上游版权与 LICENSE。
+ */
+
+/*
  * Zalith Launcher 2 — PCL2 UI port
  *
  * 「更多」版块的右侧页面，对应 PCL2 的：
@@ -298,6 +307,15 @@ fun PclOtherAboutPage() {
                     info = "${BuildKeys.LAUNCHER_NAME} 的运行内核 · 版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TYPE}",
                     buttonText = "开源代码",
                 ) { openLink(context, "https://github.com/ZalithLauncher/ZalithLauncher2") }
+
+                // GPLv3 §6：网络分发可执行文件时，必须能从同一处取得对应源代码。
+                // 这里直接把本仓库地址摆出来，不依赖用户去翻 Release 说明。
+                PclAboutRow(
+                    icon = painterResource(R.drawable.ic_launcher_logo),
+                    title = "源代码与许可",
+                    info = "GPLv3 · 本仓库即与安装包同源的完整源码，可自由获取、修改与再分发",
+                    buttonText = "GitHub",
+                ) { openLink(context, URL_PROJECT) }
 
                 PclAboutRow(
                     icon = painterResource(R.drawable.ic_launcher_logo),

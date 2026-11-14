@@ -1,4 +1,13 @@
 /*
+ * Pixelforge Launcher —— Zalith Launcher 2 的修改版（非官方）。
+ * 上游版权：Copyright (C) 2025 MovTery <movtery228@qq.com> and contributors
+ * 本文件自 2026 年起被修改；修改声明与名称/标识的处理见仓库根目录 NOTICE.md。
+ *
+ * 本程序为自由软件：你可以依据 GNU 通用公共许可证第 3 版（或更高版本）重新发布
+ * 和/或修改它。分发时请保留本声明、上游版权与 LICENSE。
+ */
+
+/*
  * Zalith Launcher 2 — PCL2 UI port
  *
  * PCL2 的图标全部以内联 SVG Path 数据的形式写在其 XAML 里，本文件把用到的

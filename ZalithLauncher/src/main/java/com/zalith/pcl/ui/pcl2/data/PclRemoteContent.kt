@@ -109,7 +109,7 @@ object PclRemoteContent {
             conn = URL("$base/api/random?type=$type").openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
-            conn.setRequestProperty("User-Agent", "ZalithLauncher/2")
+            conn.setRequestProperty("User-Agent", "Pixelforge/2")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code != HttpURLConnection.HTTP_OK) {

@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zalith.pcl.BuildConfig
+import com.zalith.pcl.BuildKeys
 import com.zalith.pcl.R
 import com.zalith.pcl.path.URL_BANGBANG93_SPONSOR
 import com.zalith.pcl.path.URL_COMMUNITY
@@ -270,7 +271,7 @@ fun PclOtherAboutPage() {
                 PclAboutRow(
                     icon = painterResource(R.drawable.img_avatar_zuanxu),
                     title = "zuanxu",
-                    info = "Zalith-Plain Craft Launcher 的作者",
+                    info = "${BuildKeys.LAUNCHER_NAME} 的作者",
                     buttonText = "打开主页",
                     highlighted = true,
                 ) { openLink(context, URL_PROJECT) }
@@ -294,14 +295,14 @@ fun PclOtherAboutPage() {
                 PclAboutRow(
                     icon = painterResource(R.drawable.img_launcher),
                     title = "Zalith Launcher 2",
-                    info = "Zalith-Plain Craft Launcher 的运行内核 · 版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TYPE}",
+                    info = "${BuildKeys.LAUNCHER_NAME} 的运行内核 · 版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TYPE}",
                     buttonText = "开源代码",
                 ) { openLink(context, "https://github.com/ZalithLauncher/ZalithLauncher2") }
 
                 PclAboutRow(
                     icon = painterResource(R.drawable.ic_launcher_logo),
-                    title = "Zalith-Plain Craft Launcher",
-                    info = "本启动器：基于 Zalith Launcher 2 与 PCL2 界面打造的 Minecraft Java 版启动器",
+                    title = BuildKeys.LAUNCHER_NAME,
+                    info = "非官方修改版 · 与 Zalith Launcher 官方无关。基于 Zalith Launcher 2 二次开发，界面参考 PCL2。",
                     buttonText = if (checking) "检查中…" else "检查更新",
                 ) {
                     // 检查更新必须**当场给出可见结果**：以前只往左下角推一条提示条，
@@ -342,7 +343,7 @@ fun PclOtherAboutPage() {
                 PclAboutRow(
                     icon = painterResource(R.drawable.img_launcher_pcl2),
                     title = "Plain Craft Launcher 2",
-                    info = "Zalith-Plain Craft Launcher 界面的移植原型：版式、配色与文案均取自 PCL2",
+                    info = "本启动器界面的移植原型：版式、配色与文案均取自 PCL2",
                     buttonText = "开源代码",
                 ) { openLink(context, URL_PCL2) }
             }

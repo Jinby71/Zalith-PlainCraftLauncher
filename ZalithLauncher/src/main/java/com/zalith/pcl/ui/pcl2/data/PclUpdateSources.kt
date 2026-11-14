@@ -107,7 +107,7 @@ object PclUpdateSources {
             conn = URL("$base/api/downloads").openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
-            conn.setRequestProperty("User-Agent", "ZalithLauncher/2")
+            conn.setRequestProperty("User-Agent", "Pixelforge/2")
             conn.setRequestProperty("Accept", "application/json")
             val code = conn.responseCode
             if (code != HttpURLConnection.HTTP_OK) {

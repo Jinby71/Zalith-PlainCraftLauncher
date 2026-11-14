@@ -24,6 +24,7 @@ package com.zalith.pcl.ui.pcl2.pages
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import com.zalith.pcl.BuildKeys
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
@@ -1894,7 +1895,7 @@ private fun PclSelectLeft() {
             runCatching { act.startActivity(getPermissionSettingsAndroid11AndAbove(act)) }
                 .onFailure {
                     PclHintHost.push(
-                        "打不开权限设置页，请手动到系统设置 → 应用 → Zalith-Plain Craft Launcher 里开启「管理设备所有文件」。",
+                        "打不开权限设置页，请手动到系统设置 → 应用 → ${BuildKeys.LAUNCHER_NAME} 里开启「管理设备所有文件」。",
                         PclHintTheme.Red,
                     )
                 }

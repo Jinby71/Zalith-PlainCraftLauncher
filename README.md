@@ -1,4 +1,4 @@
-# Zalith-Plain Craft Launcher
+# Pixelforge Launcher
 
 面向 **Android 设备** 的 [Minecraft: Java Edition](https://www.minecraft.net/) 启动器。
 
@@ -8,7 +8,9 @@
 使用 **Jetpack Compose** 编写。
 
 > 当前版本：**1.5.0（versionCode 200072）**
-> 本项目是 Zalith Launcher 2 的非官方修改版，与上游官方无关联。
+> 本项目是 Zalith Launcher 2 的**非官方修改版**，与上游官方无关联。
+> 依 GPLv3 第 7 条附加条款，名称中不含上游原名 `ZalithLauncher` 及其缩写 `ZL`，
+> 并在启动页与关于页标注「非官方修改版」。
 
 ---
 

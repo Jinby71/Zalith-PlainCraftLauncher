@@ -82,7 +82,7 @@ suspend fun measureSourceSpeed(type: SourceType): SourceSpeedResult = withContex
             readTimeout = PROBE_TIMEOUT_MS
             requestMethod = "GET"
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "ZalithLauncher")
+            setRequestProperty("User-Agent", "Pixelforge")
         }
         val start = System.currentTimeMillis()
         connection.connect()

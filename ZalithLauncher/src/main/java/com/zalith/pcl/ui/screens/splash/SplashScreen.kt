@@ -48,6 +48,9 @@ import com.zalith.pcl.viewmodel.SplashBackStackViewModel
  * @param startAllTask 开启全部的解压任务
  * @param unpackItems 解压任务列表
  */
+/** 修改版声明：GPLv3 第 7 条要求，必须出现在启动页。 */
+private const val UNOFFICIAL_NOTICE = "非官方修改版 · 与 Zalith Launcher 官方无关"
+
 @Composable
 fun SplashScreen(
     startAllTask: () -> Unit,
@@ -89,13 +92,18 @@ private fun TopBar(
     CompositionLocalProvider(
         LocalContentColor provides contentColor
     ) {
-        Row(
+        // 【GPLv3 第 7 条】修改版必须在启动页显著标注「非官方修改版」。
+        // 顶栏原来只有一行程序名，这里在下面补一行，两行都居中。
+        Column(
             modifier = modifier,
-            horizontalArrangement = Arrangement.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
+            Text(text = BuildKeys.LAUNCHER_NAME)
             Text(
-                modifier = Modifier.align(Alignment.CenterVertically),
-                text = BuildKeys.LAUNCHER_NAME
+                text = UNOFFICIAL_NOTICE,
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                color = contentColor.copy(alpha = 0.65f),
             )
         }
     }

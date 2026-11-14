@@ -57,6 +57,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zalith.pcl.BuildKeys
 import com.zalith.pcl.R
@@ -146,11 +147,18 @@ private fun PclUnpackContent(
                 .background(Color(0xFFF5F5F5))
         ) {
             // 顶栏：居中启动器名（与原生 SplashScreen 的 TopBar 对位）
-            Box(
+            // GPLv3 第 7 条：启动页必须标注「非官方修改版」，与原生启动页保持一致。
+            Column(
                 modifier = Modifier.fillMaxWidth().height(40.dp),
-                contentAlignment = Alignment.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
                 Text(text = BuildKeys.LAUNCHER_NAME, style = PclTextStyle.base(p))
+                Text(
+                    text = "非官方修改版 · 与 Zalith Launcher 官方无关",
+                    style = PclTextStyle.base(p).copy(fontSize = 10.sp),
+                    color = p.gray2,
+                )
             }
 
             Row(

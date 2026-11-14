@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zalith.pcl.BuildKeys
 import com.zalith.pcl.R
 import com.zalith.pcl.game.addons.modloader.ModLoader
 import com.zalith.pcl.game.addons.modloader.cleanroom.CleanroomVersion
@@ -662,7 +663,7 @@ private fun PclInstanceModifyContent(version: Version) {
         PclConfirmDialog(
             title = "重置此实例",
             content = "你正在重置当前实例。\n" +
-                "Zalith-Plain Craft Launcher 将会重新联网下载该实例所需的文件，并重新安装模组加载器（如有）。\n" +
+                "${BuildKeys.LAUNCHER_NAME} 将会重新联网下载该实例所需的文件，并重新安装模组加载器（如有）。\n" +
                 "此操作不会丢失你的存档、模组、资源包等。",
             confirmText = "继续",
             onConfirm = { startReset() },

@@ -1144,7 +1144,7 @@ fun PclSetupUiPage() {
                         PclTextBox(
                             value = PclSkinSettings.logoText,
                             modifier = Modifier.fillMaxWidth(),
-                            hint = "PCL",
+                            hint = PclSkinSettings.DEFAULT_LOGO_TEXT,
                             onValueChange = {
                                 PclSkinSettings.applyLogoText(it)
                                 PclSkinSettings.persist(context)
